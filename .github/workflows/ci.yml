@@ -1,0 +1,164 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 is Raspberry Pi OS Bookworm's system Python, the documented
+        # deployment target. 3.13 is what development actually happens on.
+        # Both ends must stay green.
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - name: Run tests
+        run: pytest -q --tb=short
+        env:
+          CI: "true"   # hardware-motion tests refuse to run when this is set
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - name: ruff
+        run: ruff check fws tools tests
+      - name: mypy (protocol layer only)
+        # Type-checked where it reaches the wire.
+        run: mypy fws/protocol fws/driver.py fws/telemetry.py fws/files.py
+
+  guards:
+    name: safety and licence guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: No vendored SDK source
+        # Republishing Fairino's source is a copyright problem. Make it
+        # mechanical rather than remembered.
+        run: |
+          if git ls-files | grep -qiE '(^|/)Robot\.py$'; then
+            echo "::error::Fairino SDK source must never be committed"; exit 1
+          fi
+          echo "OK: no vendored SDK source"
+
+      - name: Protocol layer has no third-party imports
+        # The wire layer must stay usable without a web framework.
+        run: |
+          if grep -rnE '^\s*(import|from)\s+(fastapi|pydantic|uvicorn|starlette)' \
+              fws/protocol fws/driver.py fws/telemetry.py fws/files.py; then
+            echo "::error::protocol layer must depend only on the stdlib"; exit 1
+          fi
+          echo "OK: protocol layer is stdlib-only"
+
+      - name: Nothing claims to be an emergency stop
+        # A grep cannot do this: disclaimers must be allowed, negations wrap
+        # across lines, and the controller genuinely has commands named
+        # GetRobotEmergencyStopState. See tools/check_terminology.py.
+        run: python tools/check_terminology.py
+
+      - name: Refused commands stay refused
+        run: |
+          pip install -e . >/dev/null
+          python - <<'PY'
+          from fws.protocol.commands import COMMANDS
+          must_refuse = {
+              "ShutDownRobotOS", "JointAllParamUpgrade", "KernelUpgrade",
+              "SoftwareUpgrade", "SetCtrlFirmwareUpgrade", "SetEncoderUpgrade",
+              "SetEndFirmwareUpgrade", "SetJointFirmwareUpgrade", "GetLuaList",
+          }
+          bad = [n for n in must_refuse
+                 if n in COMMANDS and COMMANDS[n].danger != "refused"]
+          assert not bad, f"these must be refused: {bad}"
+          assert not any(c.callable_directly for c in COMMANDS.values()
+                         if c.danger == "refused")
+          print(f"OK: {len(must_refuse)} dangerous commands refused")
+          PY
+
+  package:
+    name: wheel installs and runs with no robot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build the wheel
+        run: |
+          python -m pip install --quiet build
+          python -m build --wheel
+
+      # The adoption path is `pip install fairino-fws && fws --simulator`.
+      # Nothing else in CI exercises it: the test suite imports the package
+      # from the source tree, so a packaging mistake -- a module left out of
+      # the wheel, a missing entry point, a data file not included -- passes
+      # every other job and fails for the first person who installs it.
+      - name: Install it the way a user would, in a clean environment
+        run: |
+          python -m venv /tmp/clean
+          /tmp/clean/bin/pip install --quiet dist/*.whl
+          /tmp/clean/bin/fws --help > /dev/null
+
+      - name: The simulator starts and points away from a real robot
+        run: |
+          out=$(/tmp/clean/bin/fws --simulator --check)
+          echo "$out"
+          echo "$out" | grep -q "configuration OK"
+          echo "$out" | grep -q "127.0.0.1"
+          if echo "$out" | grep -q "192.168.57.2"; then
+            echo "::error::simulator mode left the gateway aimed at a real controller"
+            exit 1
+          fi
+
+      - name: The installed package serves its own API
+        run: |
+          /tmp/clean/bin/fws --simulator --port 8123 &
+          for i in $(seq 1 30); do
+            curl -sf localhost:8123/api/v1/system/health > /dev/null && break
+            sleep 1
+          done
+          curl -sf localhost:8123/api/v1/state | tee /dev/stderr | grep -q '"joints"'
+          curl -sf localhost:8123/api/v1/system/version | grep -q software
+          kill %1
+
+      - name: No site or internal data ships in the wheel
+        run: |
+          python - <<'PY'
+          import glob, zipfile
+          names = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist()
+          leaked = [n for n in names
+                    if any(x in n for x in ("points.json", "programs.json",
+                                            "internal/", ".venv"))]
+          assert not leaked, f"the wheel ships private data: {leaked}"
+          assert any(n.endswith("fws/testing/fake_controller.py") for n in names), \
+              "the simulator must ship -- it is the documented way to try FWS"
+          print(f"OK: {len(names)} entries, nothing private")
+          PY

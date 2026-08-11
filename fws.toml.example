@@ -1,0 +1,51 @@
+# FWS configuration. Copy to fws.toml and edit.
+#
+# Precedence: CLI flags > environment (FWS_ROBOT__IP=...) > this file > defaults
+# Every default is the refusing one. Loosen deliberately, not by accident.
+
+[robot]
+# 192.168.57.2 is the controller on the user LAN port.
+# Plug into the teach port instead and it is 192.168.58.2.
+ip = "192.168.57.2"
+rpc_timeout_s = 5.0
+
+# Keep this LONGER than any keepalive detection window set on the controller.
+# Port 8083 accepts one client; a short backoff makes FWS race the controller
+# for its own slot after a disconnect.
+telemetry_reconnect_s = 2.0
+
+[server]
+# Loopback only. To reach FWS from another machine, tunnel:
+#   ssh -L 8000:localhost:8000 user@<gateway-host>
+# Binding wider REQUIRES auth.api_keys_file; FWS refuses to start otherwise.
+bind_host = "127.0.0.1"
+port = 8000
+data_dir = "."
+
+[limits]
+# FWS's own caps, on top of the controller's soft limits and max_dis bound.
+jog_max_deg = 15.0
+jog_max_mm = 50.0
+rotation_max_deg = 15.0
+jog_max_vel_pct = 30.0
+limit_margin_deg = 0.5
+
+# Refuse any commanded pose below this TCP height, in mm. Leave unset only if
+# nothing is mounted below the robot.
+# z_floor_mm = 200.0
+
+[features]
+# MoveL produced an unintended ~300 mm motion and a controller fault on
+# software v3.8.5.1. Verify on a simulator before enabling.
+enable_movel = false
+
+# Exposes the generated command registry. Refused commands (firmware writes,
+# controller shutdown, RPC introspection) stay refused regardless.
+enable_command_passthrough = false
+enable_unverified_commands = false
+
+warn_insecure_robot_ports = true
+
+[auth]
+# One API key per line. Required for any non-loopback bind.
+# api_keys_file = "/etc/fws/api-keys"

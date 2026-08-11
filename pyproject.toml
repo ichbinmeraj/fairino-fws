@@ -1,0 +1,91 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fairino-fws"
+version = "0.1.0a0"
+description = "REST + WebSocket gateway for Fairino collaborative robots"
+authors = [{ name = "Meraj Safari" }]
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+requires-python = ">=3.11"
+keywords = ["fairino", "robot", "cobot", "robotics", "rest", "websocket", "gateway"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Manufacturing",
+  "Intended Audience :: Developers",
+  "Topic :: Scientific/Engineering :: Interface Engine/Protocol Translator",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Framework :: FastAPI",
+]
+
+# The protocol layer (fws.protocol, driver, telemetry, files) imports nothing
+# outside the standard library. These dependencies are for the HTTP server
+# only. Keeping that boundary means the wire layer stays portable.
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+]
+
+[project.urls]
+Homepage = "https://github.com/ichbinmeraj/fairino-fws"
+Repository = "https://github.com/ichbinmeraj/fairino-fws"
+Issues = "https://github.com/ichbinmeraj/fairino-fws/issues"
+Changelog = "https://github.com/ichbinmeraj/fairino-fws/blob/master/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.24",
+  "httpx>=0.27",
+  "ruff>=0.6",
+  "mypy>=1.11",
+]
+
+[project.scripts]
+fws = "fws.cli:main"
+
+
+[tool.hatch.build.targets.wheel]
+packages = ["fws"]   # examples/ is deliberately NOT packaged
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+# Generated registry data. Style-checking machine output tells you about the
+# generator's formatter, not about the code.
+extend-exclude = ["fws/protocol/commands.py", "fws/protocol/error_codes.py",
+                  "fws/protocol/lua_functions.py",
+                  "fws/protocol/lua_firmware.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# This file is mostly embedded HTML, CSS and SVG literals. Wrapping markup at
+
+# The Lua manual writes its prototypes with fullwidth punctuation, and the
+# generator's whole job is to normalise it. It has to name the characters to
+
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+
+# Type-checked only where it reaches the wire.
+[[tool.mypy.overrides]]
+module = ["fws.protocol.*", "fws.driver", "fws.telemetry", "fws.files"]
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "hardware: needs a real robot; never runs in CI",
+  "hardware_motion: MOVES the robot; requires --hardware-motion and a clear cell",
+]

@@ -1,0 +1,64 @@
+# systemd unit for FWS.
+#
+#   sudo cp deploy/fws.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now fws
+#
+# Hardened deliberately: this process can move an industrial robot, and it
+# sits on a network that also carries FTP, telnet and unauthenticated root
+# qconn. It should be able to do nothing else.
+
+[Unit]
+Description=FWS — Fairino Web Services gateway
+Documentation=https://github.com/ichbinmeraj/fairino-fws
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=fws
+Group=fws
+ExecStart=/opt/fws/.venv/bin/fws --config /etc/fws/fws.toml
+WorkingDirectory=/var/lib/fws
+
+# Restart on failure, but COLD. FWS holds no lock, resumes no job and
+# continues no motion across a restart -- an auto-restarting gateway that
+# resumed motion state would be a hazard.
+Restart=on-failure
+RestartSec=5s
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @obsolete
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Only the robot LAN and loopback. The gateway has no business anywhere else.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressAllow=127.0.0.1/32 192.168.57.0/24
+IPAddressDeny=any
+
+StateDirectory=fws
+ReadWritePaths=/var/lib/fws
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fws
+
+[Install]
+WantedBy=multi-user.target

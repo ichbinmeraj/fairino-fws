@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Vendor SDK source — NEVER commit.
+# Publishing observed facts about a wire protocol is interoperability.
+# Republishing Fairino's 685 KB source is a copyright problem.
+# tools/generate_commands.py takes its path via --sdk.
+Robot.py
+vendor/
+sdk/
+
+# Site-specific data: taught cell geometry belongs to an installation,
+# not to the project.
+points.json
+programs.json
+programs.json
+*.local.toml
+
+# Runtime
+*.log
+
+# R&D material — see internal/README.md. Kept in the working tree, never
+# published. The public repository is the FWS product only.
+internal/

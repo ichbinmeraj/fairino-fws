@@ -1,0 +1,33 @@
+# FWS deployment.
+#
+# ONE INSTANCE PER CONTROLLER. Port 8083 on the robot serves exactly one
+# client: a second FWS would be accepted at TCP level and then silently
+# starved of frames. Do not scale this service.
+
+services:
+  fws:
+    build: .
+    image: fws:latest
+    container_name: fws
+    restart: unless-stopped
+    deploy:
+      replicas: 1          # see the note above -- not a placeholder
+    # The gateway must reach the robot LAN. host networking is the simplest
+    # correct answer on a dedicated appliance; on a shared host, use a macvlan
+    # attached only to the robot interface instead.
+    network_mode: host
+    environment:
+      FWS_ROBOT__IP: "192.168.57.2"
+      FWS_SERVER__BIND_HOST: "127.0.0.1"
+      FWS_SERVER__PORT: "8000"
+    volumes:
+      - ./data:/home/fws/data
+      # Uncomment to enable authentication, which is REQUIRED for any
+      # non-loopback bind:
+      # - ./api-keys:/etc/fws/api-keys:ro
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/system/health',timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
