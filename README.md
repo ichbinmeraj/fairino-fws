@@ -9,8 +9,8 @@ It is, in spirit, what ABB's Robot Web Services is for ABB controllers: a
 language-agnostic web layer for a robot that did not ship with one.
 
 ```bash
-pip install fairino-fws
-fws --simulator          # run the whole gateway with no robot
+pip install --pre fairino-fws   # early alpha — --pre selects the pre-release
+fws --simulator                 # run the whole gateway with no robot
 ```
 
 Then open <http://127.0.0.1:8000/docs> for the interactive API.
@@ -58,7 +58,7 @@ robot.
 ## Install
 
 ```bash
-pip install fairino-fws          # from PyPI
+pip install --pre fairino-fws    # from PyPI (early alpha; --pre selects it)
 # or, from source:
 pip install .
 # or with Docker:
