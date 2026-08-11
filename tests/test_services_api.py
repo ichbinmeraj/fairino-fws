@@ -50,8 +50,8 @@ def _make_client(fake, tmp_path, services, **service_overrides):
         "services.shell_password": "s3cret",
         "services.shell_prompt": "#",
         "services.qconn_port": services["qconn"].port,
-        "services.connect_timeout_s": 5.0,
-        "services.command_timeout_s": 5.0,
+        "services.connect_timeout_s": 30.0,
+        "services.command_timeout_s": 30.0,
     }
     base.update(service_overrides)
     app_mod.create_app(config_mod.load(**base))

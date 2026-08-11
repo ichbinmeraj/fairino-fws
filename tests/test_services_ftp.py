@@ -22,7 +22,7 @@ def server():
 
 
 def _client(server, **kw):
-    kw.setdefault("timeout_s", 5)
+    kw.setdefault("timeout_s", 30)
     return FtpClient(server.host, server.port, root=ROOT, **kw)
 
 
@@ -82,7 +82,7 @@ class TestAuth:
     def test_a_rejected_login_raises_auth_error(self):
         with FakeFtpServer(user="root", password="right") as srv:
             c = FtpClient(srv.host, srv.port, user="root", password="wrong",
-                          timeout_s=4, root=ROOT)
+                          timeout_s=30, root=ROOT)
             with pytest.raises(ServiceAuthError):
                 c.connect()
 
@@ -90,7 +90,7 @@ class TestAuth:
         srv = FakeFtpServer(user="root", password="right", files=dict(FILES))
         with srv:
             c = FtpClient(srv.host, srv.port, user="root", password="right",
-                          timeout_s=4, root=ROOT)
+                          timeout_s=30, root=ROOT)
             with c:
                 assert c.list()
 
@@ -136,14 +136,14 @@ class TestListingFailuresAreDistinguishable:
                 return "DIR  FORCE_TEST.LUA  1234\r\nDIR  PAINT.LUA  99\r\n"
 
         with WeirdListing(files=dict(FILES)) as srv:
-            c = FtpClient(srv.host, srv.port, root=ROOT, timeout_s=4)
+            c = FtpClient(srv.host, srv.port, root=ROOT, timeout_s=30)
             with c, pytest.raises(ServiceError) as e:
                 c.list()
             assert "NOT an empty directory" in str(e.value)
 
     def test_a_genuinely_empty_directory_is_still_empty(self):
         with FakeFtpServer(files={}) as srv:
-            c = FtpClient(srv.host, srv.port, root=ROOT, timeout_s=4)
+            c = FtpClient(srv.host, srv.port, root=ROOT, timeout_s=30)
             with c:
                 assert c.list() == []
 

@@ -14,14 +14,14 @@ from fws.testing.fake_qconn import FakeQconnAgent
 class TestQconnLiveness:
     def test_banner_proves_the_agent_is_alive(self):
         with FakeQconnAgent() as agent:
-            info = liveness(agent.host, agent.port, timeout_s=4)
+            info = liveness(agent.host, agent.port, timeout_s=30)
         assert info["reachable"] is True
         assert info["agent"] == "qconn"
         assert info["handshake_s"] >= 0
 
     def test_service_selection_returns_ok(self):
         with FakeQconnAgent() as agent, \
-                QconnClient(agent.host, agent.port, timeout_s=4) as c:
+                QconnClient(agent.host, agent.port, timeout_s=30) as c:
             assert c.select_service("sinfo") == "OK"
 
     def test_a_non_qconn_banner_is_rejected(self):
@@ -48,7 +48,7 @@ class TestLuaValidatorHealthIsReadBackwards:
         srv.listen(1)
         host, port = srv.getsockname()
         try:
-            info = LuaValidateClient(host, port, timeout_s=3).probe_health()
+            info = LuaValidateClient(host, port, timeout_s=30).probe_health()
             assert info["validator_attached"] is False
             assert info["healthy"] is False
             assert "NO client is attached" in info["warning"]

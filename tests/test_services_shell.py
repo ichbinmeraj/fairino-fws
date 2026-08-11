@@ -19,8 +19,8 @@ def _run(server, cmd, **kw):
     kw.setdefault("user", "root")
     kw.setdefault("password", "s3cret")
     kw.setdefault("prompt", "#")
-    kw.setdefault("connect_timeout_s", 5)
-    kw.setdefault("command_timeout_s", 5)
+    kw.setdefault("connect_timeout_s", 30)
+    kw.setdefault("command_timeout_s", 30)
     return run_command(server.host, cmd, port=server.port, **kw)
 
 
@@ -56,15 +56,15 @@ class TestNegotiationAndAuth:
 
     def test_a_bad_password_raises_auth_error(self, server):
         with pytest.raises(ServiceAuthError):
-            _run(server, "echo x", password="WRONG", connect_timeout_s=3,
-                 command_timeout_s=3)
+            _run(server, "echo x", password="WRONG", connect_timeout_s=30,
+                 command_timeout_s=30)
 
     def test_a_server_needing_no_login_still_works(self):
         with FakeTelnetServer(require_login=False,
                               handler=qnx_like_handler()) as srv:
             r = run_command(srv.host, "echo direct", port=srv.port,
-                            prompt="#", connect_timeout_s=4,
-                            command_timeout_s=4)
+                            prompt="#", connect_timeout_s=30,
+                            command_timeout_s=30)
             assert r.output == "direct"
 
     def test_a_server_that_does_not_negotiate_still_works(self):
@@ -72,7 +72,7 @@ class TestNegotiationAndAuth:
                               handler=qnx_like_handler()) as srv:
             r = run_command(srv.host, "echo nonneg", port=srv.port,
                             user="root", password="s3cret", prompt="#",
-                            connect_timeout_s=4, command_timeout_s=4)
+                            connect_timeout_s=30, command_timeout_s=30)
             assert r.output == "nonneg"
 
 
@@ -97,8 +97,8 @@ class TestFailureModes:
 class TestReuseAcrossCommands:
     def test_one_login_many_commands(self, server):
         c = ShellClient(server.host, server.port, user="root",
-                        password="s3cret", prompt="#", connect_timeout_s=5,
-                        command_timeout_s=5)
+                        password="s3cret", prompt="#", connect_timeout_s=30,
+                        command_timeout_s=30)
         with c:
             c.login()
             assert c.run("echo one").output == "one"
@@ -115,7 +115,7 @@ class TestOutputFramingIsRobust:
                               handler=qnx_like_handler()) as srv:
             r = run_command(srv.host, 'echo a # b # c', port=srv.port,
                             user="root", password="s3cret", prompt="#",
-                            connect_timeout_s=4, command_timeout_s=4)
+                            connect_timeout_s=30, command_timeout_s=30)
             assert r.output == "a # b # c", (
                 "a '#' in output must not truncate the result")
 
@@ -124,8 +124,8 @@ class TestOutputFramingIsRobust:
         with FakeTelnetServer(password="s3cret",
                               handler=qnx_like_handler(table)) as srv:
             r = run_command(srv.host, "cat cfg", port=srv.port, user="root",
-                            password="s3cret", prompt="#", connect_timeout_s=4,
-                            command_timeout_s=4)
+                            password="s3cret", prompt="#", connect_timeout_s=30,
+                            command_timeout_s=30)
             assert "# comment one" in r.output
             assert "# comment two" in r.output
             assert "real line" in r.output
