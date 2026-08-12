@@ -4,6 +4,25 @@ All notable changes to FWS are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.0a1] — unreleased
+
+FWS is an API-only gateway; user interfaces live in separate packages.
+
+### Added
+
+- `fws.cli.main()` accepts a `configure_app` callback, invoked with the built
+  application and resolved settings after all startup checks pass and before
+  the server starts. This is the seam a separately installed package (such as
+  `fairino-fws-console`) mounts extra routes through, without reimplementing
+  argument parsing, simulator wiring or the safety checks.
+
+### Removed
+
+- The built-in jog console. `GET /` now returns a JSON service descriptor
+  instead of an HTML page. The operator UI moved to its own package,
+  `fairino-fws-console`; installing it restores a UI at `/console/`, and the
+  gateway itself no longer ships any.
+
 ## [0.1.0] — unreleased
 
 First public release.

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fairino-fws"
-version = "0.1.0a0"
+version = "0.1.0a1"
 description = "REST + WebSocket gateway for Fairino collaborative robots"
 authors = [{ name = "Meraj Safari" }]
 readme = "README.md"
@@ -66,13 +66,6 @@ extend-exclude = ["fws/protocol/commands.py", "fws/protocol/error_codes.py",
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
-
-[tool.ruff.lint.per-file-ignores]
-# This file is mostly embedded HTML, CSS and SVG literals. Wrapping markup at
-
-# The Lua manual writes its prototypes with fullwidth punctuation, and the
-# generator's whole job is to normalise it. It has to name the characters to
-
 
 [tool.mypy]
 python_version = "3.11"

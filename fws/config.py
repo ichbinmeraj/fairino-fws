@@ -56,6 +56,14 @@ class ServerSettings(BaseModel):
         default=pathlib.Path("."),
         description="Where site-specific state (taught points) is kept.",
     )
+    read_only: bool = Field(
+        default=False,
+        description="Refuse every operation that could change controller "
+                    "state: only GET, HEAD, OPTIONS and the telemetry "
+                    "WebSocket are served. This includes POST /motion/stop "
+                    "-- a gateway that can stop a program someone else "
+                    "started is not read-only. Use the physical E-stop.",
+    )
 
     @property
     def is_loopback(self) -> bool:
@@ -306,6 +314,7 @@ class Settings(BaseSettings):
             "telemetry": f"{self.robot.ip}:{self.robot.telemetry_port}",
             "bind": f"{self.server.bind_host}:{self.server.port}",
             "loopback_only": self.server.is_loopback,
+            "read_only": self.server.read_only,
             "auth": "enabled" if self.auth.enabled else "DISABLED (loopback)",
             "movel": self.features.enable_movel,
             "passthrough": self.features.enable_command_passthrough,

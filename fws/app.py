@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-import pathlib
 import threading
 import time
 
@@ -21,7 +20,6 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from . import capabilities as caps_mod
@@ -43,8 +41,6 @@ from .runners import AbortRegistry
 from .services_api import build as build_services_api
 from .system_api import build as build_system_api
 from .telemetry import Telemetry
-
-STATIC = pathlib.Path(__file__).parent / "static"
 
 # Module-level settings so `uvicorn fws.app:app` keeps working with defaults.
 # create_app() rebinds these; route handlers resolve them at call time.
@@ -169,7 +165,9 @@ def _error_poller():
 # ---------------------------------------------------------------- models
 class JogRequest(BaseModel):
     joint: int = Field(ge=1, le=6)
-    direction: int = Field(description="1 = positive, 0 = negative")
+    # Bounded because the handler is truthy: without ge/le, a client sending
+    # the plausible-looking -1 would be silently accepted and jog POSITIVE.
+    direction: int = Field(ge=0, le=1, description="1 = positive, 0 = negative")
     step: float = Field(default=5.0, gt=0, le=15.0, description="degrees, bounded")
     vel: float = Field(default=10.0, gt=0, le=30.0, description="percent")
 
@@ -286,6 +284,32 @@ async def _auth_middleware(request: Request, call_next):
             headers={"WWW-Authenticate": "X-API-Key"},
         )
     request.state.api_key_label = label
+    return await call_next(request)
+
+
+# Added after (therefore wrapping) the auth middleware: whether a caller holds
+# a key changes nothing about what a read-only gateway will do.
+@app.middleware("http")
+async def _read_only_middleware(request: Request, call_next):
+    """Refuse every state-changing operation when server.read_only is set.
+
+    The rule is by verb, not by route, so a route added later cannot slip
+    through an incomplete denylist. This includes POST /motion/stop: a
+    gateway that can stop a program someone else started is not read-only.
+    The telemetry WebSocket is unaffected -- it is not an HTTP request.
+    """
+    if settings.server.read_only and request.method not in (
+            "GET", "HEAD", "OPTIONS"):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=403,
+            content={"detail": (
+                "this gateway is running read-only: it observes the robot "
+                "and commands nothing, including stop. Use the physical "
+                "E-stop for emergencies. Restart without read_only to "
+                "enable commanding."
+            )},
+        )
     return await call_next(request)
 
 
@@ -434,7 +458,8 @@ def jog(req: JogRequest,
 
 class LinearJogRequest(BaseModel):
     axis: int = Field(ge=1, le=6, description="1-3 = X/Y/Z, 4-6 = RX/RY/RZ")
-    direction: int = Field(description="1 = positive, 0 = negative")
+    # Same bound and reason as JogRequest.direction.
+    direction: int = Field(ge=0, le=1, description="1 = positive, 0 = negative")
     step: float = Field(default=10.0, gt=0, le=50.0,
                         description="mm for axes 1-3, degrees for 4-6")
     vel: float = Field(default=10.0, gt=0, le=30.0)
@@ -657,4 +682,17 @@ def events(limit: int = 100, action: str | None = None):
 
 @app.get("/")
 def index():
-    return FileResponse(STATIC / "index.html")
+    """Service descriptor.
+
+    FWS is an API-only gateway and ships no user interface. This root exists
+    so a bare GET / discovers the API rather than returning 404.
+    """
+    return {
+        "service": "fws",
+        "description": "REST + WebSocket gateway for Fairino collaborative robots",
+        "api": "/api/v1",
+        "docs": "/docs",
+        "openapi": "/openapi.json",
+        "websocket": "/ws/state",
+        "read_only": settings.server.read_only,
+    }

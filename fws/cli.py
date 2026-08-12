@@ -5,8 +5,15 @@ import argparse
 import os
 import pathlib
 import sys
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from . import config as config_mod
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
+
+    from .config import Settings
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -26,6 +33,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="bind address (default 127.0.0.1)")
     p.add_argument("--port", dest="server.port", type=int,
                    help="listen port (default 8000)")
+    p.add_argument("--read-only", dest="server.read_only",
+                   action="store_const", const=True, default=None,
+                   help="serve observation only: every non-GET operation is "
+                        "refused, including stop. The gateway cannot command "
+                        "the arm at all in this mode")
     p.add_argument("--simulator", "--sim", action="store_true",
                    help="run against a built-in simulated controller instead "
                         "of a robot. Needs no hardware; reproduces the "
@@ -55,7 +67,21 @@ SIM_BANNER = """
 """
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    *,
+    configure_app: Callable[[FastAPI, Settings], None] | None = None,
+) -> int:
+    """Run the gateway.
+
+    `configure_app` is called with the built application and the resolved
+    settings, after every safety check has passed and immediately before the
+    server starts. It exists so a separately installed package can add routes
+    -- `fairino-fws-console` mounts an operator UI this way -- without having
+    to reimplement argument parsing, simulator wiring and the startup checks.
+    Its correctness is the caller's business; the gateway does not inspect
+    what gets mounted.
+    """
     args = build_parser().parse_args(argv)
     overrides = {k: v for k, v in vars(args).items() if "." in k}
 
@@ -117,8 +143,12 @@ def main(argv: list[str] | None = None) -> int:
 
     from .app import create_app
 
+    application = create_app(settings)
+    if configure_app is not None:
+        configure_app(application, settings)
+
     try:
-        uvicorn.run(create_app(settings),
+        uvicorn.run(application,
                     host=settings.server.bind_host,
                     port=settings.server.port)
     finally:

@@ -650,3 +650,79 @@ class TestHealthSaysWhichChecksDidNotRun:
                 app_mod.control._lapse_errors = 0
         assert any("watchdog is not healthy" in w for w in d["warnings"])
         assert any("may NOT trigger a stop" in w for w in d["warnings"])
+
+
+class TestJogDirectionIsBounded:
+    """direction must be 0 or 1; -1 used to be accepted and jog POSITIVE.
+
+    The handler treats direction as truthy (`bool(req.direction)`), so a
+    client sending the plausible-looking -1 for "negative" was silently
+    inverted: both of a UI's +/- buttons moved the arm the same way. Found
+    on a real FR5 by an operator, 2026-08-12. The wire convention (StartJOG
+    dir) is 0/1; the API now refuses everything else loudly.
+    """
+
+    def _client(self, fake):
+        from fastapi.testclient import TestClient
+
+        from fws import app as app_mod
+        from fws import config as config_mod
+        app_mod.create_app(config_mod.load(**{
+            "robot.ip": fake.host, "robot.rpc_port": fake.rpc_port,
+            "robot.telemetry_port": fake.stream_port,
+            "robot.upload_port": fake.upload_port,
+            "robot.download_port": fake.download_port}))
+        return app_mod, TestClient(app_mod.app)
+
+    def _lease(self, app_mod, c):
+        app_mod.control._leases.clear()   # leases persist across create_app
+        token = c.post("/api/v1/control",
+                       json={"client_id": "t"}).json()["token"]
+        h = {"X-FWS-Control-Token": token}
+        c.post("/api/v1/robot/enable",
+               json={"enable": True, "confirm": True}, headers=h)
+        return h
+
+    def test_minus_one_is_refused_not_inverted(self, fake):
+        _, c = self._client(fake)
+        with c:
+            h = self._lease(_, c)
+            r = c.post("/api/v1/motion/jog", headers=h,
+                       json={"joint": 1, "direction": -1,
+                             "step": 5, "vel": 10})
+            assert r.status_code == 422, (
+                "direction=-1 must be refused; it used to jog positive")
+
+    def test_linear_jog_refuses_it_too(self, fake):
+        _, c = self._client(fake)
+        with c:
+            h = self._lease(_, c)
+            r = c.post("/api/v1/motion/jog/linear", headers=h,
+                       json={"axis": 1, "direction": -1,
+                             "step": 5, "vel": 10})
+            assert r.status_code == 422
+
+    def test_zero_and_one_still_move_opposite_ways(self, fake):
+        """The fix must not break the valid values: 0 goes negative, 1
+        positive, and they cancel."""
+        import time as _t
+        _, c = self._client(fake)
+        with c:
+            h = self._lease(_, c)
+
+            def j1():
+                return c.get("/api/v1/state").json()["joints"][0]
+
+            start = j1()
+            assert c.post("/api/v1/motion/jog", headers=h,
+                          json={"joint": 1, "direction": 1,
+                                "step": 5, "vel": 30}).status_code == 200
+            _t.sleep(1.0)
+            up = j1()
+            assert c.post("/api/v1/motion/jog", headers=h,
+                          json={"joint": 1, "direction": 0,
+                                "step": 5, "vel": 30}).status_code == 200
+            _t.sleep(1.0)
+            back = j1()
+        assert up == pytest.approx(start + 5, abs=0.2)
+        assert back == pytest.approx(start, abs=0.2)
