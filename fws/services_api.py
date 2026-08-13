@@ -128,17 +128,23 @@ def build(get_settings, get_control, audit) -> APIRouter:
                      "them with its auth, control lock and audit; it cannot "
                      "authenticate the daemons themselves."),
         }
+        # Liveness probes get their own short timeout, not connect_timeout_s:
+        # the status page must stay responsive even when connect_timeout_s is
+        # tuned high for slow FTP transfers. A probe verdict is decided at
+        # connect time (refused/accepted are instant); the timeout only bounds
+        # the "unreachable" answer, so a few seconds is enough.
+        live_t = s.liveness_timeout_s
         if s.qconn_enabled:
             try:
                 out["liveness"]["qconn"] = qconn_mod.liveness(
-                    ip, s.qconn_port, timeout_s=s.connect_timeout_s)
+                    ip, s.qconn_port, timeout_s=live_t)
             except ServiceError as e:
                 out["liveness"]["qconn"] = {"reachable": False, "error": str(e)}
         if s.lua_validate_enabled:
             try:
                 out["liveness"]["lua_validator"] = lv_mod.LuaValidateClient(
                     ip, s.lua_validate_port,
-                    timeout_s=s.connect_timeout_s).probe_health()
+                    timeout_s=live_t).probe_health()
             except ServiceError as e:
                 out["liveness"]["lua_validator"] = {
                     "healthy": None, "error": str(e)}
@@ -338,7 +344,7 @@ def build(get_settings, get_control, audit) -> APIRouter:
         s = _svc(get_settings)
         try:
             return qconn_mod.liveness(get_settings().robot.ip, s.qconn_port,
-                                      timeout_s=s.connect_timeout_s)
+                                      timeout_s=s.liveness_timeout_s)
         except ServiceError as e:
             raise _http_from_service_error(e) from e
 
@@ -351,7 +357,7 @@ def build(get_settings, get_control, audit) -> APIRouter:
         s = _svc(get_settings)
         return lv_mod.LuaValidateClient(
             get_settings().robot.ip, s.lua_validate_port,
-            timeout_s=s.connect_timeout_s).probe_health()
+            timeout_s=s.liveness_timeout_s).probe_health()
 
     @router.post("/controller/lua-validate")
     def lua_validate(req: ShellRequest):

@@ -32,6 +32,18 @@ def _caps(behaviour):
     return Capabilities(StubDriver(behaviour))
 
 
+class StubDriverWithFault(StubDriver):
+    """Like StubDriver, but also answers error_code() as the real driver does,
+    so the probe can tell whether the controller is faulted."""
+
+    def __init__(self, behaviour, fault=(0, 0)):
+        super().__init__(behaviour)
+        self.fault = fault
+
+    def error_code(self):
+        return self.fault
+
+
 class TestTheThreeStates:
     def test_a_controller_fault_is_ABSENT(self):
         """A controller fault (-506) is recorded as ABSENT."""
@@ -60,6 +72,53 @@ class TestTheThreeStates:
 
     def test_an_unprobed_feature_is_UNKNOWN_not_ABSENT(self):
         assert _caps([0]).state("payload.cog") == UNKNOWN
+
+
+class TestProbingDuringAFaultDoesNotInventAbsence:
+    """error 14 is the controller's faulted-state answer for many getters
+    (I/O, payload, frame-number, position), not proof the firmware lacks them:
+    the identical call succeeds once the fault clears. A probe that runs while
+    the controller is faulted must therefore NOT cache those as ABSENT, or it
+    would tell the operator their firmware is too old when it is merely
+    faulted -- exactly the false "17 absent" we saw on a live FR5."""
+
+    def test_error_code_while_faulted_is_UNKNOWN_not_ABSENT(self):
+        c = Capabilities(StubDriverWithFault([14, 0.0], fault=(1, 22)))
+        c.probe()
+        assert c.state(FEATURE) == UNKNOWN
+        assert "faulted" in c._map[FEATURE].detail
+
+    def test_the_same_error_code_while_healthy_is_ABSENT(self):
+        """With no fault, a non-zero code is a real 'no' from the firmware."""
+        c = Capabilities(StubDriverWithFault([14, 0.0], fault=(0, 0)))
+        c.probe()
+        assert c.state(FEATURE) == ABSENT
+
+    def test_a_missing_method_stays_ABSENT_even_while_faulted(self):
+        """A method that truly does not exist faults with -506 (an exception),
+        not an error code -- that is real absence and holds regardless of
+        fault state."""
+        c = Capabilities(StubDriverWithFault(
+            ControllerFault("GetX: fault -506: no such method", -506),
+            fault=(1, 22)))
+        c.probe()
+        assert c.state(FEATURE) == ABSENT
+
+    def test_require_during_a_fault_never_blames_the_firmware(self):
+        c = Capabilities(StubDriverWithFault([14, 0.0], fault=(1, 22)))
+        c.probe()
+        with pytest.raises(RobotError) as e:
+            c.require(FEATURE)
+        msg = str(e.value)
+        assert "later-firmware" not in msg
+        assert "refresh" in msg
+
+    def test_an_unreadable_fault_state_falls_back_to_ABSENT(self):
+        """If the fault code cannot be read at all (a stub without error_code),
+        classification falls back to the plain error-code rule."""
+        c = _caps([14, 0.0])          # StubDriver has no error_code()
+        c.probe()
+        assert c.state(FEATURE) == ABSENT
 
 
 class TestUnrecognisedRepliesAreNotSuccess:

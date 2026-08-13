@@ -87,12 +87,32 @@ class Capabilities:
     _lock: threading.Lock = field(default_factory=threading.Lock)
     probed_at: float | None = None
 
-    def _probe_one(self, feature: str, method: str, args: tuple) -> Capability:
-        """Probe one getter, classified into AVAILABLE/ABSENT/UNKNOWN."""
+    def _is_faulted(self) -> bool:
+        """True if the controller is in a fault state right now.
+
+        Best-effort: if the fault code cannot be read (or the driver does not
+        expose it, as in unit stubs) assume not faulted and fall back to the
+        plain error-code classification."""
+        try:
+            main, sub = self.driver.error_code()
+            return bool(main) or bool(sub)
+        except Exception:
+            return False
+
+    def _probe_one(self, feature: str, method: str, args: tuple,
+                   faulted: bool | None = None) -> Capability:
+        """Probe one getter, classified into AVAILABLE/ABSENT/UNKNOWN.
+
+        `faulted` may be passed by probe() so the whole sweep shares one fault
+        read; left None (e.g. from require()'s re-probe) it is read on demand.
+        """
         try:
             result = self.driver._call(method, *args)
         except ControllerFault as e:
-            # The controller answered "no". That is a fact about the firmware.
+            # The controller raised "no such method": the firmware genuinely
+            # lacks it. That holds regardless of fault state, so it stays
+            # ABSENT -- a truly missing method faults here, it does not return
+            # an error code below.
             return Capability(feature, method, ABSENT,
                               str(e).split(": ", 1)[-1][:90])
         except TransportError as e:
@@ -105,24 +125,40 @@ class Capabilities:
             return Capability(feature, method, UNKNOWN,
                               f"FWS did not send this probe: {str(e)[:80]}")
 
+        code: int | None = None
         if isinstance(result, list) and result:
             code = result[0]
-            if code == 0:
-                return Capability(feature, method, AVAILABLE)
-            return Capability(feature, method, ABSENT,
-                              f"returned error {code}")
-        if isinstance(result, int):
-            return (Capability(feature, method, AVAILABLE) if result == 0
-                    else Capability(feature, method, ABSENT,
-                                    f"returned error {result}"))
-        # An empty list, None, or a string: unrecognised, so UNKNOWN rather
-        # than assumed fine.
-        return Capability(feature, method, UNKNOWN,
-                          f"unrecognised reply {type(result).__name__}: "
-                          f"{str(result)[:60]}")
+        elif isinstance(result, int):
+            code = result
+        if code is None:
+            # An empty list, None, or a string: unrecognised, so UNKNOWN
+            # rather than assumed fine.
+            return Capability(feature, method, UNKNOWN,
+                              f"unrecognised reply {type(result).__name__}: "
+                              f"{str(result)[:60]}")
+        if code == 0:
+            return Capability(feature, method, AVAILABLE)
+
+        # A non-zero return code is NOT proof of absence. Many getters (the I/O
+        # reads, payload, frame-number, position getters) answer error 14
+        # purely because the controller is FAULTED; the identical call succeeds
+        # once the fault clears. Probing during a fault therefore cannot tell
+        # "absent" from "suppressed by the fault" -- record UNKNOWN so a later
+        # re-probe settles it, and so require() never tells the operator their
+        # firmware is too old when it is merely faulted.
+        if faulted is None:
+            faulted = self._is_faulted()
+        if faulted:
+            return Capability(feature, method, UNKNOWN,
+                              f"returned error {code} while the controller was "
+                              f"faulted -- inconclusive; re-probe once cleared")
+        return Capability(feature, method, ABSENT, f"returned error {code}")
 
     def probe(self) -> dict[str, Capability]:
-        found = {f: self._probe_one(f, m, a) for f, m, a in PROBES}
+        # One fault read for the whole sweep: a probe that runs mid-fault must
+        # not poison the cache with false "absent" verdicts.
+        faulted = self._is_faulted()
+        found = {f: self._probe_one(f, m, a, faulted) for f, m, a in PROBES}
         with self._lock:
             self._map = found
             self.probed_at = time.time()
