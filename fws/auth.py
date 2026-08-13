@@ -15,13 +15,29 @@ import secrets
 # Paths reachable without a key, whatever the configuration says.
 # Stop must never require credentials. Health must be probeable by an
 # orchestrator that holds none.
-ALWAYS_OPEN = (
+ALWAYS_OPEN = [
     "/api/v1/motion/stop",
     "/api/v1/system/health",
     "/docs",
     "/redoc",
     "/openapi.json",
-)
+]
+
+
+def register_open_path(prefix: str) -> None:
+    """Declare a prefix reachable without a key.
+
+    For assets that must load *in order to* obtain or send a credential: a
+    page that asks for a key cannot itself require that key. Data stays
+    protected -- only the named prefix opens -- so a package mounting a UI
+    registers its static prefix and nothing more.
+    """
+    if not prefix.startswith("/"):
+        raise ValueError(f"open path must start with '/': {prefix!r}")
+    if prefix.rstrip("/") in ("", "/api", "/api/v1"):
+        raise ValueError(f"refusing to open the API surface: {prefix!r}")
+    if prefix not in ALWAYS_OPEN:
+        ALWAYS_OPEN.append(prefix)
 
 
 def parse_key_file(path: pathlib.Path) -> dict[str, str]:

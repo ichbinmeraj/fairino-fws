@@ -187,3 +187,40 @@ class TestTheKeyParsingRuleHasOneImplementation:
         assert ks.identify("k1") == "ci-runner"
         assert ks.identify("k2") == "unlabelled"
         assert ks.identify("nope") is None
+
+
+class TestOpenPathRegistration:
+    """A package that mounts a UI must be able to serve the page that ASKS
+    for the key; the data behind it stays protected."""
+
+    def test_registering_opens_only_that_prefix(self, secured, monkeypatch):
+        from fws import auth as auth_mod
+        original = list(auth_mod.ALWAYS_OPEN)
+        try:
+            auth_mod.register_open_path("/console")
+            assert auth_mod.is_open_path("/console/js/main.js")
+            assert not auth_mod.is_open_path("/api/v1/state")
+        finally:
+            auth_mod.ALWAYS_OPEN[:] = original
+
+    def test_registering_is_idempotent(self):
+        from fws import auth as auth_mod
+        original = list(auth_mod.ALWAYS_OPEN)
+        try:
+            auth_mod.register_open_path("/console")
+            auth_mod.register_open_path("/console")
+            assert auth_mod.ALWAYS_OPEN.count("/console") == 1
+        finally:
+            auth_mod.ALWAYS_OPEN[:] = original
+
+    def test_the_api_surface_cannot_be_opened(self):
+        """The whole point is that data stays behind the key."""
+        from fws import auth as auth_mod
+        for bad in ("/", "/api", "/api/v1", "/api/v1/"):
+            with pytest.raises(ValueError, match=r"refusing|must start"):
+                auth_mod.register_open_path(bad)
+
+    def test_a_relative_prefix_is_refused(self):
+        from fws import auth as auth_mod
+        with pytest.raises(ValueError, match="must start"):
+            auth_mod.register_open_path("console")
