@@ -25,6 +25,7 @@ class FakeTelnetServer:
         self.negotiate = negotiate
         self.require_login = require_login
         self.commands_seen: list[str] = []
+        self._leftover: dict[int, bytes] = {}   # per-connection read remainder
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._sock.bind(("127.0.0.1", 0))
@@ -55,8 +56,14 @@ class FakeTelnetServer:
                              daemon=True).start()
 
     def _readline(self, conn: socket.socket) -> str:
-        buf = b""
-        while not buf.endswith(b"\n"):
+        # Return EXACTLY ONE line, keeping any bytes after the first newline
+        # for the next call. The client sends the command and its sentinel
+        # echo back-to-back; when the two coalesce into one TCP segment (which
+        # they do a few % of the time), reading "up to the last newline" fed
+        # both to the handler as a single merged command. A real telnetd's
+        # line discipline splits on each newline, so the fake must too.
+        buf = self._leftover.pop(id(conn), b"")
+        while b"\n" not in buf:
             chunk = conn.recv(256)
             if not chunk:
                 break
@@ -71,7 +78,10 @@ class FakeTelnetServer:
                     filtered.append(chunk[i])
                     i += 1
             buf += bytes(filtered)
-        return buf.decode(errors="replace").strip("\r\n")
+        line, sep, rest = buf.partition(b"\n")
+        if sep and rest:
+            self._leftover[id(conn)] = rest
+        return line.decode(errors="replace").strip("\r\n")
 
     def _session(self, conn: socket.socket) -> None:
         try:

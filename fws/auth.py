@@ -34,10 +34,15 @@ def register_open_path(prefix: str) -> None:
     """
     if not prefix.startswith("/"):
         raise ValueError(f"open path must start with '/': {prefix!r}")
-    if prefix.rstrip("/") in ("", "/api", "/api/v1"):
+    p = "/" + prefix.strip("/")
+    # Reject anything that would open the API. Both directions matter: a
+    # prefix UNDER /api ("/api/v1/motion") opens real endpoints, and a prefix
+    # that /api starts WITH ("/", "/ap", "/a") opens it via the startswith
+    # match in is_open_path.
+    if p == "/" or p.startswith("/api") or "/api".startswith(p):
         raise ValueError(f"refusing to open the API surface: {prefix!r}")
-    if prefix not in ALWAYS_OPEN:
-        ALWAYS_OPEN.append(prefix)
+    if p not in ALWAYS_OPEN:
+        ALWAYS_OPEN.append(p)
 
 
 def parse_key_file(path: pathlib.Path) -> dict[str, str]:
@@ -103,4 +108,7 @@ class KeyStore:
 
 
 def is_open_path(path: str) -> bool:
-    return any(path.startswith(p) for p in ALWAYS_OPEN)
+    # Segment-aware: an open "/console" matches "/console" and "/console/x"
+    # but NOT "/consolexyz". A bare startswith would let a registered prefix
+    # accidentally open a longer sibling path.
+    return any(path == p or path.startswith(p + "/") for p in ALWAYS_OPEN)

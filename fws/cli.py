@@ -110,7 +110,18 @@ def main(
         return 2
 
     if args.print_config:
-        print(settings.model_dump_json(indent=2))
+        # Redact the controller-service passwords: --print-config output is
+        # exactly what gets pasted into a bug report, and these are
+        # root-shell / FTP credentials. summary() already omits secrets; this
+        # is the other dump path.
+        import json
+
+        data = settings.model_dump(mode="json")
+        svc = data.get("services", {})
+        for field in ("ftp_password", "shell_password"):
+            if svc.get(field):
+                svc[field] = "***redacted***"
+        print(json.dumps(data, indent=2))
         return 0
 
     problems = settings.check_safe_to_start()

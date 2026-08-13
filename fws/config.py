@@ -8,7 +8,11 @@ import tomllib
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
 
@@ -201,9 +205,9 @@ class ControllerServicesSettings(BaseModel):
         default=False,
         description="Enable Lua validation via the controller's internal "
                     "validator (port 8060) -- compile-check a program WITHOUT "
-                    "uploading it. Off by default: a dead client on 8060 is "
-                    "which can wedge the upload service. This path "
-                    "incident, so this path is the least proven.",
+                    "uploading it. Off by default: a dead client on 8060 can "
+                    "wedge the upload service, so this path is the least "
+                    "proven of the controller services.",
     )
     lua_validate_port: int = Field(default=8060, ge=1, le=65535)
 
@@ -235,6 +239,19 @@ class AuthSettings(BaseModel):
         return self.api_keys_file is not None
 
 
+class _FileSource(PydanticBaseSettingsSource):
+    """Supplies config-file data as a settings source ranked BELOW env vars,
+    so precedence is the documented CLI > env > file > defaults. The file
+    dict is handed in per call via load()'s `_file_data` init argument, not a
+    class global, so concurrent loads don't clobber each other."""
+
+    def get_field_value(self, field, field_name):  # pragma: no cover - unused
+        return None, field_name, False
+
+    def __call__(self) -> dict[str, Any]:
+        return getattr(self.settings_cls, "_pending_file_data", {}) or {}
+
+
 class Settings(BaseSettings):
     """Complete FWS configuration."""
 
@@ -243,6 +260,17 @@ class Settings(BaseSettings):
         env_nested_delimiter="__",
         extra="forbid",
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls, settings_cls, init_settings, env_settings,
+        dotenv_settings, file_secret_settings,
+    ):
+        # Highest first: CLI overrides (init) > env > config file > defaults.
+        # The stock order puts init above env, which silently discarded an
+        # env var whenever the file also set that key.
+        return (init_settings, env_settings, _FileSource(settings_cls),
+                file_secret_settings)
 
     robot: RobotSettings = Field(default_factory=RobotSettings)
     server: ServerSettings = Field(default_factory=ServerSettings)
@@ -337,21 +365,27 @@ def load(config_path: pathlib.Path | None = None,
          **overrides: Any) -> Settings:
     """Build Settings from file, environment and explicit overrides (dotted
     keys, e.g. "robot.ip")."""
-    data: dict[str, Any] = {}
+    file_data: dict[str, Any] = {}
     if config_path is not None:
         if not config_path.exists():
             raise FileNotFoundError(f"config file not found: {config_path}")
-        data = _read_toml(config_path)
+        file_data = _read_toml(config_path)
 
+    # CLI overrides (dotted keys) become init kwargs -- the highest source.
+    # The config file goes through _FileSource, ranked below env, so the
+    # precedence is CLI > env > file > defaults (see settings_customise_sources).
+    cli_data: dict[str, Any] = {}
     for dotted, value in overrides.items():
         if value is None:
             continue
         section, _, key = dotted.partition(".")
         if key:
-            data.setdefault(section, {})[key] = value
+            cli_data.setdefault(section, {})[key] = value
         else:
-            data[section] = value
+            cli_data[section] = value
 
-    # BaseSettings applies environment variables on top of the passed data,
-    # giving precedence: CLI > env > file > defaults.
-    return Settings(**data)
+    Settings._pending_file_data = file_data
+    try:
+        return Settings(**cli_data)
+    finally:
+        Settings._pending_file_data = {}

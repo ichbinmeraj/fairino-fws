@@ -42,8 +42,19 @@ from .services_api import build as build_services_api
 from .system_api import build as build_system_api
 from .telemetry import Telemetry
 
+
 # Module-level settings so `uvicorn fws.app:app` keeps working with defaults.
 # create_app() rebinds these; route handlers resolve them at call time.
+def _pkg_version() -> str:
+    """Report the installed package version to /docs and /openapi.json rather
+    than a hardcoded string that drifts from the release."""
+    from importlib.metadata import PackageNotFoundError, version
+    try:
+        return version("fairino-fws")
+    except PackageNotFoundError:  # editable checkout without metadata
+        return "0.0.0+dev"
+
+
 settings = config_mod.load()
 
 _ERROR_POLL_INTERVAL_S = 0.5
@@ -82,7 +93,7 @@ app = FastAPI(
         "NOTE: no endpoint here is an emergency stop. The physical E-stop is "
         "hardware only. /motion/stop is a functional stop of jog motion."
     ),
-    version="0.1.0",
+    version=_pkg_version(),
 )
 
 driver = RobotDriver(settings.robot.ip,
@@ -472,9 +483,9 @@ AXIS_NAMES = {1: "X", 2: "Y", 3: "Z", 4: "RX", 5: "RY", 6: "RZ"}
 @app.post("/api/v1/motion/jog/linear")
 def jog_linear(req: LinearJogRequest,
          x_fws_control_token: str | None = Header(default=None)):
-    _require("motion", x_fws_control_token)
     """Cartesian jog: solved backwards through IK and refused if any joint
     would exceed a soft limit."""
+    _require("motion", x_fws_control_token)
     cap = (settings.limits.jog_max_mm if req.axis <= 3
            else settings.limits.rotation_max_deg)
     if req.step > cap:

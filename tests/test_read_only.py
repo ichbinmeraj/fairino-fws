@@ -117,3 +117,28 @@ class TestWiring:
     def test_summary_reports_it(self):
         s = config_mod.load(**{"server.read_only": True})
         assert s.summary()["read_only"] is True
+
+
+class TestConfigPrecedence:
+    """Precedence is CLI > env > file > defaults, as documented. The stock
+    pydantic-settings order ranked the file (passed as init kwargs) above
+    env, silently discarding an env var whenever the file set the same key —
+    a real trap for the shipped Docker/compose deployment."""
+
+    def test_env_overrides_the_config_file(self, tmp_path, monkeypatch):
+        f = tmp_path / "fws.toml"
+        f.write_text("[server]\nread_only = false\n")
+        monkeypatch.setenv("FWS_SERVER__READ_ONLY", "true")
+        assert config_mod.load(f).server.read_only is True
+
+    def test_cli_overrides_env(self, tmp_path, monkeypatch):
+        f = tmp_path / "fws.toml"
+        f.write_text("[server]\nread_only = false\n")
+        monkeypatch.setenv("FWS_SERVER__READ_ONLY", "true")
+        s = config_mod.load(f, **{"server.read_only": False})
+        assert s.server.read_only is False
+
+    def test_file_still_applies_without_env(self, tmp_path):
+        f = tmp_path / "fws.toml"
+        f.write_text("[server]\nread_only = true\n")
+        assert config_mod.load(f).server.read_only is True
