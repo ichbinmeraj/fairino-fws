@@ -224,3 +224,38 @@ class TestOpenPathRegistration:
         from fws import auth as auth_mod
         with pytest.raises(ValueError, match="must start"):
             auth_mod.register_open_path("console")
+
+
+class TestOpenPathCannotOpenTheApi:
+    """register_open_path is a public extension point; a weak check here is
+    an authentication bypass, since cli.py disclaims inspecting what a hook
+    mounts. These pin the two ways the old startswith test leaked."""
+
+    def teardown_method(self):
+        from fws import auth as auth_mod
+        # restore the built-in list after each mutation
+        auth_mod.ALWAYS_OPEN[:] = [
+            "/api/v1/motion/stop", "/api/v1/system/health",
+            "/docs", "/redoc", "/openapi.json",
+        ]
+
+    def test_prefixes_that_the_api_starts_with_are_refused(self):
+        from fws import auth as auth_mod
+        for bad in ("/", "/a", "/ap", "/api", "/api/v1", "/api/v1/motion"):
+            with pytest.raises(ValueError):
+                auth_mod.register_open_path(bad)
+
+    def test_a_registered_prefix_does_not_open_a_longer_sibling(self):
+        from fws import auth as auth_mod
+        auth_mod.register_open_path("/console")
+        assert auth_mod.is_open_path("/console")
+        assert auth_mod.is_open_path("/console/js/main.js")
+        assert not auth_mod.is_open_path("/consolexyz")     # segment-aware
+        assert not auth_mod.is_open_path("/api/v1/state")
+
+    def test_the_builtin_open_paths_still_match(self):
+        from fws import auth as auth_mod
+        assert auth_mod.is_open_path("/api/v1/motion/stop")
+        assert auth_mod.is_open_path("/docs")
+        assert auth_mod.is_open_path("/docs/oauth2-redirect")
+        assert not auth_mod.is_open_path("/api/v1/motion/jog")
