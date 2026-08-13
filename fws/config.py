@@ -213,6 +213,17 @@ class ControllerServicesSettings(BaseModel):
 
     connect_timeout_s: float = Field(default=8.0, gt=0, le=60)
     command_timeout_s: float = Field(default=20.0, gt=0, le=300)
+    liveness_timeout_s: float = Field(
+        default=5.0, gt=0, le=60,
+        description="Socket timeout for the status-page liveness probes only "
+                    "(GET /controller/services). A probe is meant to fail "
+                    "fast: it never changes a health verdict -- a refused or "
+                    "accepted connection is decided instantly -- it only bounds "
+                    "how long the 'unreachable' verdict waits. Kept separate "
+                    "from connect_timeout_s, which may be tuned high for real "
+                    "FTP transfers (e.g. a controller whose ftpd greets after a "
+                    "reverse-DNS timeout) without making the status page hang.",
+    )
 
     @property
     def any_privileged_enabled(self) -> bool:

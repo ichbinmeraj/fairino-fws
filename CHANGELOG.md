@@ -23,6 +23,27 @@ FWS is an API-only gateway; user interfaces live in separate packages.
   `fairino-fws-console`; installing it restores a UI at `/console/`, and the
   gateway itself no longer ships any.
 
+### Fixed
+
+- Capability probing is now **fault-aware**. Many getters (the I/O reads,
+  payload, frame-number and position getters) answer `error 14` purely
+  because the controller is faulted; the identical call succeeds once the
+  fault clears. The probe previously cached every non-zero return code as
+  `ABSENT` ("a later-firmware feature"), so a probe that happened to run while
+  the controller was faulted reported real features as permanently missing —
+  observed on a live FR5 as `14/31 available · 17 absent`. A non-zero code
+  read while the controller is faulted is now `UNKNOWN` ("re-probe once
+  cleared"), never `ABSENT`; a method that truly does not exist still faults
+  with `-506` and stays `ABSENT`. Re-probing the same unit healthy reports
+  `28/31 · 3 absent · 0 unknown`.
+- `GET /controller/services` no longer hangs for the full `connect_timeout_s`.
+  Its liveness probes now use a dedicated, short `services.liveness_timeout_s`
+  (default 5 s): a liveness verdict is decided at connect time, so the long
+  connect timeout — which may be tuned high for slow FTP transfers — only ever
+  delayed the "unreachable" answer. On a controller whose ftpd greets after a
+  30 s reverse-DNS timeout this cut the status endpoint from 45 s to ~5 s with
+  no change to any verdict.
+
 ## [0.1.0] — unreleased
 
 First public release.
