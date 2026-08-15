@@ -120,6 +120,12 @@ def _on_lease_lapse(reason: str, lease) -> None:
     if "motion" not in lease.domains:
         return
     results = _stop_all()
+    # The most important line the audit trail can hold: the gateway stopped
+    # the arm on its own, because a client went away mid-move. It used to
+    # exist ONLY as a print, so an incident review found the arm stopped and
+    # nothing saying who or why.
+    audit.record("watchdog.stop", actor=lease.client_id, reason=reason,
+                 domains=sorted(lease.domains), results=results)
     print(f"[watchdog] {lease.client_id} lapsed ({reason}); "
           f"stop issued: {results}", flush=True)
 

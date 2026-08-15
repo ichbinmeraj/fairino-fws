@@ -6,6 +6,14 @@ All notable changes to FWS are documented here. The format follows
 
 ## [0.1.0a5] — unreleased
 
+### Fixed
+
+- **The watchdog stop leaves an audit line.** The gateway stopping the arm
+  on its own — because a motion-lease holder went away mid-move — is the
+  single most important thing the audit trail can hold, and it existed only
+  as a `print()`. An incident review found the arm stopped and nothing
+  saying who or why.
+
 ### Added
 
 - **Named poses, stored by the gateway.** A taught point is production data,
