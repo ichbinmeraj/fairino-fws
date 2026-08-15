@@ -110,6 +110,44 @@ All routes are under `/api/v1`. The full, live specification is served at
 Stop and health are never authenticated: a client whose key is wrong or missing
 must still be able to stop the arm and probe health.
 
+## Testing your code against FWS
+
+Your cell logic can run against a fake robot in CI. `fws.testing.gateway()`
+starts the whole stack — fake controller, driver, telemetry, the app — on
+ephemeral ports:
+
+```python
+from fws.testing import gateway
+
+def test_my_cell_logic():
+    with gateway() as g:
+        assert g.get("/api/v1/state").status_code == 200
+        g.controller.trip_fault()          # now handle it
+```
+
+For pytest, add `pytest_plugins = ["fws.testing.pytest_plugin"]` to your
+conftest and take the `fws_gateway` fixture. The scenario API on the fake
+(`trip_fault`, `clear_fault`, `set_joints`, `set_force`,
+`corrupt_next_frame`) is a stable surface you can depend on.
+
+The simulator reproduces the quirks that actually bite: StartJOG's wire
+argument order, the >270 ms jog start latency, `error 14` while faulted, the
+433-byte telemetry frame, and a Lua compiler that rejects what this firmware
+really rejects.
+
+## Examples
+
+`examples/` has four runnable programs — read state, jog under a lease, the
+full program loop, fault handling. They need no robot and no configuration:
+
+```bash
+python examples/01_read_state.py
+```
+
+Pass `--url http://localhost:8000` to run any of them against a gateway you
+started yourself, including one connected to a real arm. Read `SAFETY.md`
+first if you do.
+
 ## Development
 
 The whole gateway runs against an in-process simulator, so you can develop with
