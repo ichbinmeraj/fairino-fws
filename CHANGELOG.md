@@ -4,7 +4,42 @@ All notable changes to FWS are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0a12] — unreleased
+## [0.1.0a13] — unreleased
+
+### Added
+
+- **A Python client library — `fws.client.FwsClient`.** The gateway's pitch
+  is "drive the robot from any language, no vendor SDK", which was true of
+  the wire and a half-truth in practice: every integrator reimplemented the
+  same control-lease state machine, and three copies existed in this project
+  alone.
+
+  ```python
+  from fws.client import FwsClient
+
+  with FwsClient("http://localhost:8000") as fws:
+      with fws.control("motion"):        # acquires, heartbeats, releases
+          fws.enable()
+          fws.jog(joint=1, direction=1, step=5)
+      # released cleanly — no watchdog stop
+  ```
+
+  Dependency-free (urllib, not requests). Typed refusals — `NeedsLease`,
+  `HeldByAnother`, `NeedsConfirm`, all subclassing `Refused` — carry the
+  gateway's own wording. `control()` heartbeats at a third of the TTL and
+  raises `LeaseLost` if renewal fails, rather than letting you keep
+  commanding a robot the watchdog is about to stop.
+
+- The four `examples/` now drive this client instead of a private copy;
+  lease handling drops from thirty lines to three.
+
+### Fixed
+
+- `wait_until_idle` in the client polled `motion_done` before the controller
+  had begun moving (it takes >270 ms to start), read the previous move's
+  "done", and returned immediately. It now waits out the start latency.
+
+## [0.1.0a12] — 2026-08-15
 
 ### Added
 
