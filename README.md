@@ -98,7 +98,7 @@ All routes are under `/api/v1`. The full, live specification is served at
 
 | Prefix | What it covers |
 |---|---|
-| `/state`, `/motion`, `/ws/state` | live state, jog, stop, preview, the WebSocket stream |
+| `/state`, `/motion`, `/ws/state` | live state, jog, move, stop, preview, the WebSocket stream |
 | `/ws/events`, `/events/stream` | pushed events: commands, faults, watchdog stops |
 | `/recordings` | telemetry recordings and the automatic fault dump |
 | `/robot`, `/io`, `/frames` | control layer: pose, I/O, tool/work frames, payload |
