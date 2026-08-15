@@ -4,7 +4,34 @@ All notable changes to FWS are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0a10] — unreleased
+## [0.1.0a11] — unreleased
+
+### Added
+
+- **`POST /api/v1/motion/move` — go to a pose, pre-flighted.** The single
+  largest capability missing from this gateway. Every ingredient already
+  existed; what was missing was a route putting them in the right order.
+
+  Before anything is transmitted: the pose is six numbers; inverse
+  kinematics solves it, so an unreachable pose or a singularity is refused
+  here rather than discovered by the arm; every solved joint lands inside
+  its soft-limit band with the standoff; the *target* TCP is above the
+  configured floor; speed is inside the cap; the caller holds the motion
+  lease and has confirmed. The command is audited *before* transmission, so
+  a controller that wedges mid-move still leaves a record.
+
+  Then one `MoveL` goes out, non-blocking — a blocking call would hold the
+  RPC lock for the whole move and make a stop impossible.
+
+  **Still off by default.** `features.enable_movel` stays false because this
+  layout once produced an unintended ~300 mm motion and a controller fault
+  on v3.8.5.1. It has since been read carefully from the SDK source, but
+  that is not the same as verified on your hardware, and the difference is
+  300 mm of arm travel. The refusal says so, with the evidence.
+
+  It is not a path runner: trajectories belong in Lua on the controller.
+
+## [0.1.0a10] — 2026-08-15
 
 ### Added
 

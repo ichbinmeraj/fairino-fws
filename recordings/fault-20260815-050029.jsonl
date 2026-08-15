@@ -1,0 +1,2 @@
+{"_meta": {"why": "fault 1/22", "frames": 1, "window_s": 60.0}}
+{"ts": 1786770029.170136, "connected": true, "frames": 1, "bad_checksum": 0, "error": null, "counter": 0, "program_state": 1, "joints": [0.0, -90.0, 90.0, -90.0, -90.0, 0.0], "tcp": [495.0, 0.0, -273.0, -90.0, -90.0, 0.0], "joint_torque": [-0.021, -0.529, -0.213, -0.0298, -0.0013, -0.007], "loaded_program_truncated": null, "ft": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "error_main": 0, "error_sub": 0}

@@ -41,6 +41,7 @@ from .invoke_api import build as build_invoke_api
 from .lua_api import router as lua_router
 from .metrics import render as render_metrics
 from .model_api import build as build_model_api
+from .move_api import build as build_move_api
 from .poses import PoseStore
 from .poses_api import build as build_poses_api
 from .programs_api import build as build_programs_api
@@ -882,6 +883,12 @@ app.include_router(build_backup_api(
 # The measured kinematic model, as URDF. No URDF matched to this firmware
 # is published anywhere, and the vendor's is measurably worse.
 app.include_router(build_model_api(lambda: driver))
+# Absolute moves. Off unless features.enable_movel is set: the wire
+# layout once produced an unintended ~300 mm motion on this firmware.
+app.include_router(build_move_api(
+    lambda: driver, lambda: settings, _limits, lambda: LIMIT_MARGIN,
+    lambda: control, _audit,
+))
 # Telemetry recordings, and the dump taken automatically on a fault.
 app.include_router(build_recorder_api(lambda: recorder, _audit))
 app.include_router(build_poses_api(
