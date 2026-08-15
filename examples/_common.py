@@ -4,83 +4,29 @@ Every example takes `--url` to run against a gateway you started yourself
 (including one talking to a real robot). With no `--url` it starts a
 simulated gateway through `fws.testing.gateway()` and tears it down after.
 
-Deliberately dependency-free -- urllib, not requests -- so the examples run
-straight after `pip install fairino-fws` with nothing else installed.
+The examples drive the real client library, `fws.client.FwsClient`, rather
+than a private copy -- that duplication is what the library exists to end,
+and an example that used something other than the shipped tool would be
+teaching the wrong thing.
 """
 from __future__ import annotations
 
 import argparse
 import contextlib
-import json
 import sys
-import urllib.error
-import urllib.request
+
+from fws.client import FwsClient
 
 
-class Client:
-    """The smallest useful FWS client: HTTP plus the control-lease dance."""
+class ExampleClient(FwsClient):
+    """FwsClient plus a handle on the fake robot, when we started one.
 
-    def __init__(self, url: str, api_key: str | None = None,
-                 controller=None) -> None:
-        self.url = url.rstrip("/")
-        self.api_key = api_key
-        self.token: str | None = None
-        # The fake robot, when this example started a simulated gateway;
-        # None when --url points at a gateway someone else is running. It is
-        # how an example scripts a condition (a fault, a pose) that no API
-        # would sensibly offer.
-        self.controller = controller
+    Example 04 needs to make the robot fault. There is no API for that -- it
+    would be a strange thing for a gateway to offer -- so it reaches the fake
+    controller directly, which is what the test harness exposes it for.
+    """
 
-    def request(self, method: str, path: str, body=None):
-        headers = {}
-        data = None
-        if body is not None:
-            data = json.dumps(body).encode()
-            headers["Content-Type"] = "application/json"
-        if self.api_key:
-            headers["X-API-Key"] = self.api_key
-        if self.token:
-            headers["X-FWS-Control-Token"] = self.token
-        req = urllib.request.Request(self.url + path, data=data,
-                                     headers=headers, method=method)
-        try:
-            with urllib.request.urlopen(req, timeout=30) as r:
-                raw = r.read()
-                return r.status, (json.loads(raw) if raw else None)
-        except urllib.error.HTTPError as e:
-            raw = e.read()
-            detail = None
-            with contextlib.suppress(Exception):
-                detail = json.loads(raw)
-            return e.code, detail
-
-    def get(self, path):
-        return self.request("GET", path)
-
-    def post(self, path, body=None):
-        return self.request("POST", path, body)
-
-    def put(self, path, body=None):
-        return self.request("PUT", path, body)
-
-    def take_control(self, domains=("motion",), client_id="example"):
-        """Acquire a lease. FWS stops the arm if a holder stops renewing, so
-        anything that commands motion holds one."""
-        status, body = self.request(
-            "POST", "/api/v1/control",
-            {"client_id": client_id, "domains": list(domains), "ttl_s": 30})
-        if status != 201:
-            raise SystemExit(f"could not take control ({status}): {body}")
-        self.token = body["token"]
-        return self.token
-
-    def heartbeat(self):
-        return self.request("POST", "/api/v1/control/heartbeat")
-
-    def release(self):
-        if self.token:
-            self.request("DELETE", "/api/v1/control")
-            self.token = None
+    controller = None
 
 
 def parse_args(description: str) -> argparse.Namespace:
@@ -96,7 +42,8 @@ def connect(description: str):
     """Yield (client, args). Starts a simulated gateway when no --url."""
     args = parse_args(description)
     if args.url:
-        yield Client(args.url, args.api_key), args
+        with ExampleClient(args.url, api_key=args.api_key) as fws:
+            yield fws, args
         return
     try:
         from fws.testing import gateway
@@ -109,8 +56,9 @@ def connect(description: str):
             f"or point this at a running one with --url.") from e
     print("· no --url given: starting a simulated gateway "
           "(nothing will move)\n")
-    with gateway() as g:
-        yield Client(g.url, controller=g.controller), args
+    with gateway() as g, ExampleClient(g.url) as fws:
+        fws.controller = g.controller
+        yield fws, args
 
 
 def show(label: str, value) -> None:
