@@ -1,0 +1,5890 @@
+{
+  "components": {
+    "schemas": {
+      "AcquireRequest": {
+        "properties": {
+          "client_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Client Id",
+            "type": "string"
+          },
+          "domains": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Domains",
+            "type": "array"
+          },
+          "ttl_s": {
+            "default": 30.0,
+            "maximum": 600.0,
+            "minimum": 5.0,
+            "title": "Ttl S",
+            "type": "number"
+          }
+        },
+        "required": [
+          "client_id"
+        ],
+        "title": "AcquireRequest",
+        "type": "object"
+      },
+      "AnalogOutputRequest": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "value": {
+            "description": "percent",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "AnalogOutputRequest",
+        "type": "object"
+      },
+      "CaptureBody": {
+        "properties": {
+          "note": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Note",
+            "type": "string"
+          },
+          "overwrite": {
+            "default": false,
+            "title": "Overwrite",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "tool frame this pose belongs to; read from the controller when omitted",
+            "title": "Tool"
+          },
+          "wobj": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wobj"
+          }
+        },
+        "title": "CaptureBody",
+        "type": "object"
+      },
+      "DigitalOutputRequest": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "required: an output can actuate a gripper or a tool",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "value": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Value",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "DigitalOutputRequest",
+        "type": "object"
+      },
+      "EnableRequest": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to enable",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "enable": {
+            "title": "Enable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enable"
+        ],
+        "title": "EnableRequest",
+        "type": "object"
+      },
+      "FtpWriteRequest": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "content_base64": {
+            "description": "file contents, base64-encoded",
+            "title": "Content Base64",
+            "type": "string"
+          },
+          "path": {
+            "description": "path under the controller's file root, or an absolute path",
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "content_base64"
+        ],
+        "title": "FtpWriteRequest",
+        "type": "object"
+      },
+      "GripperRequest": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true: a gripper closes on whatever is in it",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "force": {
+            "default": 50,
+            "description": "percent of maximum grip force",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Force",
+            "type": "integer"
+          },
+          "index": {
+            "default": 1,
+            "maximum": 8.0,
+            "minimum": 1.0,
+            "title": "Index",
+            "type": "integer"
+          },
+          "max_time_ms": {
+            "default": 30000,
+            "maximum": 60000.0,
+            "minimum": 0.0,
+            "title": "Max Time Ms",
+            "type": "integer"
+          },
+          "position": {
+            "description": "percent closed: 0 open, 100 closed",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "speed": {
+            "default": 50,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Speed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "position"
+        ],
+        "title": "GripperRequest",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "JogRequest": {
+        "properties": {
+          "direction": {
+            "description": "1 = positive, 0 = negative",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Direction",
+            "type": "integer"
+          },
+          "joint": {
+            "maximum": 6.0,
+            "minimum": 1.0,
+            "title": "Joint",
+            "type": "integer"
+          },
+          "step": {
+            "default": 5.0,
+            "description": "degrees; bounded by limits.jog_max_deg",
+            "exclusiveMinimum": 0.0,
+            "title": "Step",
+            "type": "number"
+          },
+          "vel": {
+            "default": 10.0,
+            "description": "percent; bounded by limits.jog_max_vel_pct",
+            "exclusiveMinimum": 0.0,
+            "title": "Vel",
+            "type": "number"
+          }
+        },
+        "required": [
+          "joint",
+          "direction"
+        ],
+        "title": "JogRequest",
+        "type": "object"
+      },
+      "LinearJogRequest": {
+        "properties": {
+          "axis": {
+            "description": "1-3 = X/Y/Z, 4-6 = RX/RY/RZ",
+            "maximum": 6.0,
+            "minimum": 1.0,
+            "title": "Axis",
+            "type": "integer"
+          },
+          "direction": {
+            "description": "1 = positive, 0 = negative",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Direction",
+            "type": "integer"
+          },
+          "frame": {
+            "default": "base",
+            "description": "base or tool",
+            "title": "Frame",
+            "type": "string"
+          },
+          "step": {
+            "default": 10.0,
+            "description": "mm for axes 1-3, degrees for 4-6",
+            "exclusiveMinimum": 0.0,
+            "title": "Step",
+            "type": "number"
+          },
+          "vel": {
+            "default": 10.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Vel",
+            "type": "number"
+          }
+        },
+        "required": [
+          "axis",
+          "direction"
+        ],
+        "title": "LinearJogRequest",
+        "type": "object"
+      },
+      "MoveRequest": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true: this moves the arm to an absolute pose",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "pose": {
+            "description": "target TCP: x, y, z, rx, ry, rz -- mm and degrees",
+            "items": {
+              "type": "number"
+            },
+            "title": "Pose",
+            "type": "array"
+          },
+          "tool": {
+            "default": 0,
+            "maximum": 15.0,
+            "minimum": 0.0,
+            "title": "Tool",
+            "type": "integer"
+          },
+          "user": {
+            "default": 0,
+            "maximum": 14.0,
+            "minimum": 0.0,
+            "title": "User",
+            "type": "integer"
+          },
+          "vel": {
+            "default": 20.0,
+            "description": "percent; bounded by limits.jog_max_vel_pct",
+            "exclusiveMinimum": 0.0,
+            "title": "Vel",
+            "type": "number"
+          }
+        },
+        "required": [
+          "pose"
+        ],
+        "title": "MoveRequest",
+        "type": "object"
+      },
+      "PointTableRestore": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "required: this overwrites the controller's taught points",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "content_base64": {
+            "description": "the .db file, base64-encoded",
+            "title": "Content Base64",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content_base64"
+        ],
+        "title": "PointTableRestore",
+        "type": "object"
+      },
+      "PoseBody": {
+        "properties": {
+          "joints": {
+            "description": "six joint angles, degrees",
+            "items": {
+              "type": "number"
+            },
+            "title": "Joints",
+            "type": "array"
+          },
+          "note": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Note",
+            "type": "string"
+          },
+          "overwrite": {
+            "default": false,
+            "title": "Overwrite",
+            "type": "boolean"
+          },
+          "tcp": {
+            "description": "six TCP values, mm and degrees",
+            "items": {
+              "type": "number"
+            },
+            "title": "Tcp",
+            "type": "array"
+          },
+          "tool": {
+            "default": 0,
+            "maximum": 15.0,
+            "minimum": 0.0,
+            "title": "Tool",
+            "type": "integer"
+          },
+          "wobj": {
+            "default": 0,
+            "maximum": 14.0,
+            "minimum": 0.0,
+            "title": "Wobj",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "joints",
+          "tcp"
+        ],
+        "title": "PoseBody",
+        "type": "object"
+      },
+      "ProgramBody": {
+        "properties": {
+          "dwell_ms": {
+            "default": 0,
+            "description": "pause at each pose",
+            "maximum": 60000.0,
+            "minimum": 0.0,
+            "title": "Dwell Ms",
+            "type": "integer"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "upload under this name instead of returning the source",
+            "title": "Name"
+          },
+          "poses": {
+            "description": "pose names, in order of travel",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Poses",
+            "type": "array"
+          },
+          "speed": {
+            "default": 20.0,
+            "description": "percent of configured speed",
+            "exclusiveMinimum": 0.0,
+            "maximum": 100.0,
+            "title": "Speed",
+            "type": "number"
+          }
+        },
+        "required": [
+          "poses"
+        ],
+        "title": "ProgramBody",
+        "type": "object"
+      },
+      "RebootRequest": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "i_have_physical_or_switched_power": {
+            "default": false,
+            "description": "a reboot de-energises the arm and the controller must come back on its own",
+            "title": "I Have Physical Or Switched Power",
+            "type": "boolean"
+          }
+        },
+        "title": "RebootRequest",
+        "type": "object"
+      },
+      "RenameBody": {
+        "properties": {
+          "to": {
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to"
+        ],
+        "title": "RenameBody",
+        "type": "object"
+      },
+      "RestartRequest": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "i_understand_the_arm_may_move_or_stop": {
+            "default": false,
+            "description": "restarting the robot application interrupts whatever it is doing",
+            "title": "I Understand The Arm May Move Or Stop",
+            "type": "boolean"
+          }
+        },
+        "title": "RestartRequest",
+        "type": "object"
+      },
+      "RunRequest": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "required: a program can command unbounded motion",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "skip_validation": {
+            "default": false,
+            "description": "run without checking the program's motion targets. Needed for programs FWS cannot read statically -- point names, computed poses, arcs -- and recorded in the audit log with the reason the check was skipped",
+            "title": "Skip Validation",
+            "type": "boolean"
+          },
+          "validation_note": {
+            "default": "",
+            "description": "why validation was skipped; recorded in the audit log",
+            "title": "Validation Note",
+            "type": "string"
+          }
+        },
+        "title": "RunRequest",
+        "type": "object"
+      },
+      "SelectRequest": {
+        "description": "Choose the program to run, and optionally start it in one call.",
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "required when start=true: a program commands unbounded motion",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "start": {
+            "default": false,
+            "description": "also run it immediately",
+            "title": "Start",
+            "type": "boolean"
+          }
+        },
+        "title": "SelectRequest",
+        "type": "object"
+      },
+      "ShellRequest": {
+        "properties": {
+          "command": {
+            "description": "the command line to run on the controller's root shell",
+            "title": "Command",
+            "type": "string"
+          },
+          "confirm": {
+            "default": false,
+            "description": "required: this runs as root on the controller",
+            "title": "Confirm",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command"
+        ],
+        "title": "ShellRequest",
+        "type": "object"
+      },
+      "ShutdownRequest": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "required: this is one-way, the controller cannot be powered back on through any Fairino API",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "i_have_physical_or_switched_power": {
+            "default": false,
+            "description": "required: confirm you can actually power the cell back on. There is no remote path.",
+            "title": "I Have Physical Or Switched Power",
+            "type": "boolean"
+          },
+          "reason": {
+            "description": "recorded in the audit log",
+            "maxLength": 200,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ShutdownRequest",
+        "type": "object"
+      },
+      "SpeedRequest": {
+        "properties": {
+          "percent": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100.0,
+            "title": "Percent",
+            "type": "number"
+          }
+        },
+        "required": [
+          "percent"
+        ],
+        "title": "SpeedRequest",
+        "type": "object"
+      },
+      "StartBody": {
+        "properties": {
+          "name": {
+            "description": "letters, digits, dot, dash, underscore",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "StartBody",
+        "type": "object"
+      },
+      "ToolFrameRequest": {
+        "description": "Define a tool (TCP) frame.\n\n`offset` is the tool centre point relative to the FLANGE centre, in\nmm and degrees: [x, y, z, rx, ry, rz].",
+        "properties": {
+          "confirm": {
+            "default": false,
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "frame_type": {
+            "default": 0,
+            "description": "0 = tool frame, 1 = sensor frame",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Frame Type",
+            "type": "integer"
+          },
+          "install": {
+            "default": 0,
+            "description": "0 = on the robot end, 1 = external",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Install",
+            "type": "integer"
+          },
+          "load_num": {
+            "default": 0,
+            "maximum": 14.0,
+            "minimum": 0.0,
+            "title": "Load Num",
+            "type": "integer"
+          },
+          "offset": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 6,
+            "minItems": 6,
+            "title": "Offset",
+            "type": "array"
+          },
+          "tool_id": {
+            "default": 0,
+            "maximum": 15.0,
+            "minimum": 0.0,
+            "title": "Tool Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "offset"
+        ],
+        "title": "ToolFrameRequest",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WorkFrameRequest": {
+        "description": "Define a work object frame, relative to `ref_frame`.",
+        "properties": {
+          "confirm": {
+            "default": false,
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "offset": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 6,
+            "minItems": 6,
+            "title": "Offset",
+            "type": "array"
+          },
+          "ref_frame": {
+            "default": 0,
+            "maximum": 14.0,
+            "minimum": 0.0,
+            "title": "Ref Frame",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "offset"
+        ],
+        "title": "WorkFrameRequest",
+        "type": "object"
+      },
+      "ZeroRequest": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "title": "Confirm",
+            "type": "boolean"
+          }
+        },
+        "title": "ZeroRequest",
+        "type": "object"
+      },
+      "fws__commands_api__InvokeRequest": {
+        "properties": {
+          "args": {
+            "description": "positional arguments, in WIRE order",
+            "items": {},
+            "title": "Args",
+            "type": "array"
+          },
+          "confirm": {
+            "default": false,
+            "description": "required for anything classified as motion",
+            "title": "Confirm",
+            "type": "boolean"
+          }
+        },
+        "title": "InvokeRequest",
+        "type": "object"
+      },
+      "fws__control_api__PayloadRequest": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "load_num": {
+            "default": 0,
+            "description": "payload slot; 0 is the default",
+            "maximum": 14.0,
+            "minimum": 0.0,
+            "title": "Load Num",
+            "type": "integer"
+          },
+          "mass_kg": {
+            "maximum": 50.0,
+            "minimum": 0.0,
+            "title": "Mass Kg",
+            "type": "number"
+          }
+        },
+        "required": [
+          "mass_kg"
+        ],
+        "title": "PayloadRequest",
+        "type": "object"
+      },
+      "fws__files_api__UploadRequest": {
+        "description": "Text or base64, never both. Text for source, base64 for binary.",
+        "properties": {
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "file contents, for text kinds",
+            "title": "Content"
+          },
+          "content_base64": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "file contents, for binary kinds",
+            "title": "Content Base64"
+          },
+          "if_match": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "the md5 you believe you are editing. FWS reads the file back first and refuses with 412 if it has changed",
+            "title": "If Match"
+          },
+          "overwrite": {
+            "default": false,
+            "description": "required to replace a name already in this gateway's index. The index is not the controller's directory, so this is a weaker check than it looks",
+            "title": "Overwrite",
+            "type": "boolean"
+          },
+          "verify": {
+            "default": false,
+            "description": "read the file back after writing and compare md5. Off by default: it doubles traffic on the transfer service that wedged in incident 19",
+            "title": "Verify",
+            "type": "boolean"
+          }
+        },
+        "title": "UploadRequest",
+        "type": "object"
+      },
+      "fws__force_api__ActivateRequest": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "state": {
+            "description": "0 = off, 1 = on",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "State",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "title": "ActivateRequest",
+        "type": "object"
+      },
+      "fws__force_api__PayloadRequest": {
+        "description": "Payload below the force sensor.\n\nDistinct from the robot payload at PUT /robot/payload: this feeds the\nsensor's gravity compensation, that feeds the arm's dynamic model. They are\nindependent.",
+        "properties": {
+          "cog_mm": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "centre of mass [x, y, z] in mm, in the sensor frame",
+            "title": "Cog Mm"
+          },
+          "confirm": {
+            "default": false,
+            "description": "required: wrong compensation makes every force reading wrong, and force readings gate collision detection",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "mass_kg": {
+            "maximum": 50.0,
+            "minimum": 0.0,
+            "title": "Mass Kg",
+            "type": "number"
+          }
+        },
+        "required": [
+          "mass_kg"
+        ],
+        "title": "PayloadRequest",
+        "type": "object"
+      },
+      "fws__gripper_api__ActivateRequest": {
+        "properties": {
+          "action": {
+            "default": 1,
+            "description": "1 = activate/reset, 0 = deactivate",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Action",
+            "type": "integer"
+          },
+          "confirm": {
+            "default": false,
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "index": {
+            "default": 1,
+            "description": "gripper number",
+            "maximum": 8.0,
+            "minimum": 1.0,
+            "title": "Index",
+            "type": "integer"
+          }
+        },
+        "title": "ActivateRequest",
+        "type": "object"
+      },
+      "fws__invoke_api__InvokeRequest": {
+        "properties": {
+          "args": {
+            "description": "positional arguments in WIRE order, which is NOT always the SDK's Python signature order -- see wire_args",
+            "items": {},
+            "title": "Args",
+            "type": "array"
+          },
+          "confirm": {
+            "default": false,
+            "description": "required for motion-class and unknown-class commands",
+            "title": "Confirm",
+            "type": "boolean"
+          }
+        },
+        "title": "InvokeRequest",
+        "type": "object"
+      },
+      "fws__programs_api__UploadRequest": {
+        "properties": {
+          "content": {
+            "description": "Lua source",
+            "title": "Content",
+            "type": "string"
+          },
+          "overwrite": {
+            "default": false,
+            "title": "Overwrite",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "UploadRequest",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "REST + WebSocket gateway for Fairino collaborative robots. NOTE: no endpoint here is an emergency stop. The physical E-stop is hardware only. /motion/stop is a functional stop of jog motion.",
+    "title": "Fairino Web Services"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/": {
+      "get": {
+        "description": "Service descriptor.\n\nFWS is an API-only gateway and ships no user interface. This root exists\nso a bare GET / discovers the API rather than returning 404.",
+        "operationId": "index__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Index"
+      }
+    },
+    "/api/v1/backup": {
+      "get": {
+        "description": "What this controller can produce, and what each contains.",
+        "operationId": "list_backups_api_v1_backup_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Backups",
+        "tags": [
+          "backup"
+        ]
+      }
+    },
+    "/api/v1/backup/{kind}": {
+      "get": {
+        "description": "Download a backup bundle (tar.gz), base64-encoded.",
+        "operationId": "get_backup_api_v1_backup__kind__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Backup",
+        "tags": [
+          "backup"
+        ]
+      }
+    },
+    "/api/v1/capabilities": {
+      "get": {
+        "description": "What this controller actually supports, probed rather than assumed.",
+        "operationId": "capabilities_api_v1_capabilities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Capabilities",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/capabilities/refresh": {
+      "post": {
+        "operationId": "capabilities_refresh_api_v1_capabilities_refresh_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Capabilities Refresh",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/commands": {
+      "get": {
+        "description": "The full catalogue, filterable.",
+        "operationId": "list_commands_api_v1_commands_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "danger",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Danger"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "verified",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Verified"
+            }
+          },
+          {
+            "in": "query",
+            "name": "callable_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Callable Only",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Commands",
+        "tags": [
+          "commands"
+        ]
+      }
+    },
+    "/api/v1/commands/{name}": {
+      "get": {
+        "operationId": "get_command_api_v1_commands__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Command",
+        "tags": [
+          "commands"
+        ]
+      },
+      "post": {
+        "description": "Superseded by POST /api/v1/invoke/{name}. Open classes only.\n\nGates, most-refusing first: refused; not a single wire call; argument\nshape; passthrough flag; unverified flag; needs a lease (refused here,\nreferred to /api/v1/invoke). The first three share fws/invoke.py with\nthe new route.",
+        "operationId": "invoke_api_v1_commands__name__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/fws__commands_api__InvokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Invoke",
+        "tags": [
+          "commands"
+        ]
+      }
+    },
+    "/api/v1/control": {
+      "delete": {
+        "operationId": "control_release_api_v1_control_delete",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Control Release"
+      },
+      "get": {
+        "operationId": "control_status_api_v1_control_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Control Status"
+      },
+      "post": {
+        "operationId": "control_acquire_api_v1_control_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcquireRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Control Acquire"
+      }
+    },
+    "/api/v1/control/heartbeat": {
+      "post": {
+        "operationId": "control_heartbeat_api_v1_control_heartbeat_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ttl_s",
+            "required": false,
+            "schema": {
+              "default": 30.0,
+              "title": "Ttl S",
+              "type": "number"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Control Heartbeat"
+      }
+    },
+    "/api/v1/control/{domain}": {
+      "delete": {
+        "description": "Force-release a lease (administrative override); does not fire the watchdog.",
+        "operationId": "control_break_api_v1_control__domain__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "title": "Domain",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Control Break"
+      }
+    },
+    "/api/v1/controller/files": {
+      "delete": {
+        "operationId": "ftp_delete_api_v1_controller_files_delete",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "title": "Path",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "confirm",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Confirm",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ftp Delete",
+        "tags": [
+          "controller-services"
+        ]
+      },
+      "get": {
+        "operationId": "ftp_list_api_v1_controller_files_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ftp List",
+        "tags": [
+          "controller-services"
+        ]
+      },
+      "put": {
+        "operationId": "ftp_upload_api_v1_controller_files_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FtpWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ftp Upload",
+        "tags": [
+          "controller-services"
+        ]
+      }
+    },
+    "/api/v1/controller/files/download": {
+      "get": {
+        "operationId": "ftp_download_api_v1_controller_files_download_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "title": "Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ftp Download",
+        "tags": [
+          "controller-services"
+        ]
+      }
+    },
+    "/api/v1/controller/lua-validate": {
+      "post": {
+        "description": "Compile-check without upload. Currently refuses with 501; see\nLuaValidateClient.validate.",
+        "operationId": "lua_validate_api_v1_controller_lua_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShellRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Lua Validate",
+        "tags": [
+          "controller-services"
+        ]
+      }
+    },
+    "/api/v1/controller/lua-validator": {
+      "get": {
+        "description": "Health of the controller's Lua validator; a refused connection\nmeans healthy. See LuaValidateClient.probe_health.",
+        "operationId": "lua_validator_health_api_v1_controller_lua_validator_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Lua Validator Health",
+        "tags": [
+          "controller-services"
+        ]
+      }
+    },
+    "/api/v1/controller/processes": {
+      "get": {
+        "description": "`pidin` over the shell: processes running on the controller.",
+        "operationId": "processes_api_v1_controller_processes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Processes",
+        "tags": [
+          "controller-services"
+        ]
+      }
+    },
+    "/api/v1/controller/qconn": {
+      "get": {
+        "operationId": "qconn_liveness_api_v1_controller_qconn_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Qconn Liveness",
+        "tags": [
+          "controller-services"
+        ]
+      }
+    },
+    "/api/v1/controller/reboot": {
+      "post": {
+        "description": "Reboot the whole controller OS. De-energises the arm.",
+        "operationId": "reboot_api_v1_controller_reboot_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebootRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reboot",
+        "tags": [
+          "controller-services"
+        ]
+      }
+    },
+    "/api/v1/controller/restart": {
+      "post": {
+        "description": "Restart the robot application (not the OS).\n\nCommand is operator-supplied (services.shell_restart_command); FWS does\nnot guess a process to signal.",
+        "operationId": "restart_api_v1_controller_restart_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restart",
+        "tags": [
+          "controller-services"
+        ]
+      }
+    },
+    "/api/v1/controller/services": {
+      "get": {
+        "description": "Enabled services and a connect-and-handshake liveness probe of\neach. Reports no credentials.",
+        "operationId": "services_status_api_v1_controller_services_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Services Status",
+        "tags": [
+          "controller-services"
+        ]
+      }
+    },
+    "/api/v1/controller/shell": {
+      "post": {
+        "operationId": "shell_api_v1_controller_shell_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShellRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Shell",
+        "tags": [
+          "controller-services"
+        ]
+      }
+    },
+    "/api/v1/errors": {
+      "get": {
+        "description": "The controller's current fault, decoded to code, meaning and\nwhat to check.",
+        "operationId": "current_errors_api_v1_errors_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Current Errors",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/errors/codes": {
+      "get": {
+        "description": "The whole decoded table, searchable.",
+        "operationId": "list_error_codes_api_v1_errors_codes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 300,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Error Codes",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/errors/codes/{code}": {
+      "get": {
+        "operationId": "explain_code_api_v1_errors_codes__code__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Explain Code",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/errors/reset": {
+      "post": {
+        "description": "Clear latched faults. The condition that caused them may still hold.",
+        "operationId": "reset_errors_api_v1_errors_reset_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Reset Errors"
+      }
+    },
+    "/api/v1/events": {
+      "get": {
+        "description": "Audit trail of commands and state changes.",
+        "operationId": "events_api_v1_events_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Events"
+      }
+    },
+    "/api/v1/events/stream": {
+      "get": {
+        "description": "The same events as Server-Sent Events, for anything that would rather\nnot hold a WebSocket open (curl, a shell script, an EventSource).",
+        "operationId": "events_stream_api_v1_events_stream_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "topics",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Topics"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Events Stream"
+      }
+    },
+    "/api/v1/execution": {
+      "get": {
+        "operationId": "execution_api_v1_execution_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Execution",
+        "tags": [
+          "programs"
+        ]
+      }
+    },
+    "/api/v1/execution/pause": {
+      "post": {
+        "operationId": "handler_api_v1_execution_pause_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Handler",
+        "tags": [
+          "programs"
+        ]
+      }
+    },
+    "/api/v1/execution/resume": {
+      "post": {
+        "operationId": "handler_api_v1_execution_resume_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Handler",
+        "tags": [
+          "programs"
+        ]
+      }
+    },
+    "/api/v1/execution/run": {
+      "post": {
+        "description": "Start the loaded program.\n\nA Lua program commands motion directly on the controller: the gateway's\njog bounds, step limits and IK pre-flight do not apply.",
+        "operationId": "run_api_v1_execution_run_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run",
+        "tags": [
+          "programs"
+        ]
+      }
+    },
+    "/api/v1/execution/stop": {
+      "post": {
+        "description": "Stop the running program. Not lockable or confirmable, like\nevery stop in FWS.",
+        "operationId": "stop_program_api_v1_execution_stop_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Stop Program",
+        "tags": [
+          "programs"
+        ]
+      }
+    },
+    "/api/v1/files": {
+      "get": {
+        "description": "What the controller can do with a file, per kind, with\nevidence. `fileType` is an opcode, not a type; see\nfws/files_wire.py.",
+        "operationId": "file_types_api_v1_files_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "File Types",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/-/verdicts": {
+      "get": {
+        "description": "Recent compiler verdicts and the log-fetch budget, so the\nrate limiting is observable.",
+        "operationId": "verdicts_api_v1_files___verdicts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Verdicts",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/lua/{name}/versions": {
+      "get": {
+        "description": "Every saved revision of a program.\n\nThe teach pendant keeps history in a directory beside each program\n(`user/force_test/*.lua`). Version content is not reachable over the\nfile wire (FileDownload takes a flat name); recover it from\nGET /api/v1/backup/userdata. This route lists what exists.",
+        "operationId": "program_versions_api_v1_files_lua__name__versions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Refresh",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Program Versions",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/{kind}": {
+      "get": {
+        "description": "List files.\n\n`source=index` (default) is instant and returns what this gateway\nuploaded; `source=controller` reads the real directory (~4 s, cached)\nfrom the vendor's user-data backup, which cannot wedge anything. See\nfws/files_listing.py.",
+        "operationId": "list_files_api_v1_files__kind__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "default": "index",
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Refresh",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_autosaves",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Autosaves",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Files",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/{kind}/{name}": {
+      "delete": {
+        "description": "Delete a file. Reconciles the index when it has drifted.",
+        "operationId": "delete_file_api_v1_files__kind___name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete File",
+        "tags": [
+          "files"
+        ]
+      },
+      "get": {
+        "description": "Fetch a file and its md5.\n\nThe md5 is what a client hands back as `if_match` on PUT.",
+        "operationId": "download_file_api_v1_files__kind___name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download File",
+        "tags": [
+          "files"
+        ]
+      },
+      "put": {
+        "description": "Upload a file, and for Lua, say why if the compiler refuses it.",
+        "operationId": "upload_file_api_v1_files__kind___name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/fws__files_api__UploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload File",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/force/activate": {
+      "post": {
+        "description": "Turn the force sensor on or off. Turning it off silently\nremoves force-based protection (guards, compliance,\ninsertion).",
+        "operationId": "activate_api_v1_force_activate_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/fws__force_api__ActivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate",
+        "tags": [
+          "force"
+        ]
+      }
+    },
+    "/api/v1/force/config": {
+      "get": {
+        "description": "Everything the controller reports about the sensor.",
+        "operationId": "force_config_api_v1_force_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Force Config",
+        "tags": [
+          "force"
+        ]
+      }
+    },
+    "/api/v1/force/payload": {
+      "get": {
+        "description": "The sensor's payload compensation and the robot's, side\nby side. They are set by different commands and can\ndisagree.",
+        "operationId": "get_payload_api_v1_force_payload_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Payload",
+        "tags": [
+          "force"
+        ]
+      },
+      "put": {
+        "description": "Tell the sensor what hangs below it. Confirmation\nrequired: a wrong mass biases every force reading.",
+        "operationId": "set_payload_api_v1_force_payload_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/fws__force_api__PayloadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Payload",
+        "tags": [
+          "force"
+        ]
+      }
+    },
+    "/api/v1/force/strategies": {
+      "get": {
+        "description": "What force-reactive motion exists, and why FWS does not run it.\n\nConstant-force, insertion and surface finding modify how the next move\nbehaves; issuing the mode from the gateway and the move from a program\nleaves them unsynchronised. They belong in the Lua program, next to\ntheir moves.",
+        "operationId": "strategies_api_v1_force_strategies_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Strategies",
+        "tags": [
+          "force"
+        ]
+      }
+    },
+    "/api/v1/force/zero": {
+      "post": {
+        "description": "Tare the sensor. Do this with the tool hanging free and\nthe arm still, or contact force is baked into the offset.",
+        "operationId": "zero_api_v1_force_zero_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZeroRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Zero",
+        "tags": [
+          "force"
+        ]
+      }
+    },
+    "/api/v1/frames/tool": {
+      "get": {
+        "description": "Active tool (TCP) frame: which one, and its offset from the flange.",
+        "operationId": "tool_frame_api_v1_frames_tool_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Tool Frame",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/frames/tool/{frame_id}": {
+      "put": {
+        "description": "Define a tool frame.\n\nThe tool frame is where the controller believes the working point is; a\nwrong value silently shifts every later move and this gateway's own\npre-flight. Tool frames are numbered 1-15 (work object frames 0-14).\nThe active frame is not selected here: Fairino passes tool and\nworkpiece numbers with each move.",
+        "operationId": "set_tool_frame_api_v1_frames_tool__frame_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "frame_id",
+            "required": true,
+            "schema": {
+              "title": "Frame Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolFrameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Tool Frame",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/frames/work": {
+      "get": {
+        "description": "Active work object frame.",
+        "operationId": "work_frame_api_v1_frames_work_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Work Frame",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/frames/work/{frame_id}": {
+      "put": {
+        "description": "Define a work object frame. Redefining one silently relocates\nevery position expressed in it.",
+        "operationId": "set_work_frame_api_v1_frames_work__frame_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "frame_id",
+            "required": true,
+            "schema": {
+              "title": "Frame Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkFrameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Work Frame",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/gripper": {
+      "get": {
+        "description": "Gripper feedback where available. `fitted` is inferred from a\nnon-zero reading (an absent gripper answers with zeros).",
+        "operationId": "gripper_api_v1_gripper_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Gripper",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/gripper/activate": {
+      "post": {
+        "description": "Power up or reset the gripper. Most need this before they move.",
+        "operationId": "activate_api_v1_gripper_activate_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "force_probe",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Force Probe",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/fws__gripper_api__ActivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate",
+        "tags": [
+          "gripper"
+        ]
+      }
+    },
+    "/api/v1/gripper/command": {
+      "post": {
+        "description": "Move the gripper to a position, with every argument bounded.\n\nThe wire order is MoveGripper(index, pos, vel, force, maxtime, block,\ntype, rotNum, rotVel, rotTorque). The last three belong to a rotating\ngripper; they are sent as zeros because sending a rotation to a\ngripper that does not rotate is not something to do by accident.",
+        "operationId": "command_api_v1_gripper_command_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "force_probe",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Force Probe",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GripperRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Command",
+        "tags": [
+          "gripper"
+        ]
+      }
+    },
+    "/api/v1/invoke": {
+      "get": {
+        "description": "The catalogue, with each command's class and how it was derived.",
+        "operationId": "list_commands_api_v1_invoke_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "danger",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Danger"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "confidence",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Confidence"
+            }
+          },
+          {
+            "in": "query",
+            "name": "callable_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Callable Only",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "verified",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Verified"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Commands",
+        "tags": [
+          "invoke"
+        ]
+      }
+    },
+    "/api/v1/invoke/policy": {
+      "get": {
+        "description": "What each class costs to call, and where the classes come from.",
+        "operationId": "gating_policy_api_v1_invoke_policy_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Gating Policy",
+        "tags": [
+          "invoke"
+        ]
+      }
+    },
+    "/api/v1/invoke/{name}": {
+      "get": {
+        "operationId": "get_command_api_v1_invoke__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Command",
+        "tags": [
+          "invoke"
+        ]
+      },
+      "post": {
+        "description": "Send one command, once, with its arguments validated first.\n\nChecks in most-refusing order: exists, refused, callable, argument\nshape, then lock and confirmation. Shape is checked before the lock,\nbefore anything is transmitted.",
+        "operationId": "invoke_api_v1_invoke__name__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/fws__invoke_api__InvokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Invoke",
+        "tags": [
+          "invoke"
+        ]
+      }
+    },
+    "/api/v1/io/analog/inputs/{index}": {
+      "get": {
+        "operationId": "analog_input_api_v1_io_analog_inputs__index__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "index",
+            "required": true,
+            "schema": {
+              "title": "Index",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Analog Input",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/io/analog/outputs/{index}": {
+      "put": {
+        "operationId": "set_analog_output_api_v1_io_analog_outputs__index__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "index",
+            "required": true,
+            "schema": {
+              "title": "Index",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalogOutputRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Analog Output",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/io/digital/inputs/{index}": {
+      "get": {
+        "operationId": "digital_input_api_v1_io_digital_inputs__index__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "index",
+            "required": true,
+            "schema": {
+              "title": "Index",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Digital Input",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/io/digital/outputs/{index}": {
+      "put": {
+        "description": "Set a digital output. Confirmation required: a DO commonly\ndrives a gripper, clamp or tool changer.",
+        "operationId": "set_digital_output_api_v1_io_digital_outputs__index__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "index",
+            "required": true,
+            "schema": {
+              "title": "Index",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DigitalOutputRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Digital Output",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/io/tool/digital/inputs/{index}": {
+      "get": {
+        "operationId": "tool_digital_input_api_v1_io_tool_digital_inputs__index__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "index",
+            "required": true,
+            "schema": {
+              "title": "Index",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tool Digital Input",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/lua/bridge": {
+      "get": {
+        "description": "Which side each name lives on: `rpc_only` cannot be called\nfrom Lua, `lua_only` cannot be reached from the gateway.",
+        "operationId": "bridge_api_v1_lua_bridge_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Bridge",
+        "tags": [
+          "lua"
+        ]
+      }
+    },
+    "/api/v1/lua/conflicts": {
+      "get": {
+        "description": "Every place the two APIs, or the manual and itself, disagree.",
+        "operationId": "conflicts_api_v1_lua_conflicts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Conflicts",
+        "tags": [
+          "lua"
+        ]
+      }
+    },
+    "/api/v1/lua/firmware": {
+      "get": {
+        "description": "What one real controller accepts, as opposed to what Fairino documented.\n\nMeasured with the upload validator (a one-line program, no motion or\nexecution). `absent` lists documented names that do not exist on this\nfirmware.",
+        "operationId": "firmware_api_v1_lua_firmware_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Firmware",
+        "tags": [
+          "lua"
+        ]
+      }
+    },
+    "/api/v1/lua/functions": {
+      "get": {
+        "description": "The catalogue, filterable. `section` matches the manual's\nnumbering as a prefix.",
+        "operationId": "list_functions_api_v1_lua_functions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "section",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Section"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "conflicts_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Conflicts Only",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 400,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Functions",
+        "tags": [
+          "lua"
+        ]
+      }
+    },
+    "/api/v1/lua/functions/{name}": {
+      "get": {
+        "description": "One function, on both sides, with every caveat attached.",
+        "operationId": "get_function_api_v1_lua_functions__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Function",
+        "tags": [
+          "lua"
+        ]
+      }
+    },
+    "/api/v1/lua/sections": {
+      "get": {
+        "description": "The manual's own grouping -- motion, IO, welding, force, and the rest.",
+        "operationId": "sections_api_v1_lua_sections_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Sections",
+        "tags": [
+          "lua"
+        ]
+      }
+    },
+    "/api/v1/metrics": {
+      "get": {
+        "description": "Prometheus exposition of the counters FWS already keeps.\n\nDeliberately NOT on the always-open list: it carries live joint\npositions, and this gateway treats live state as needing a key.",
+        "operationId": "metrics_api_v1_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Metrics"
+      }
+    },
+    "/api/v1/model": {
+      "get": {
+        "operationId": "describe_api_v1_model_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Describe",
+        "tags": [
+          "model"
+        ]
+      }
+    },
+    "/api/v1/model/urdf": {
+      "get": {
+        "operationId": "urdf_api_v1_model_urdf_get",
+        "parameters": [
+          {
+            "description": "'primitives' draws stand-in cylinders so a viewer shows an arm; 'none' is pure kinematics",
+            "in": "query",
+            "name": "visuals",
+            "required": false,
+            "schema": {
+              "default": "primitives",
+              "description": "'primitives' draws stand-in cylinders so a viewer shows an arm; 'none' is pure kinematics",
+              "title": "Visuals",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "default": "fr5",
+              "maxLength": 64,
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Urdf",
+        "tags": [
+          "model"
+        ]
+      }
+    },
+    "/api/v1/motion/jog": {
+      "post": {
+        "operationId": "jog_api_v1_motion_jog_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JogRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Jog"
+      }
+    },
+    "/api/v1/motion/jog/linear": {
+      "post": {
+        "description": "Cartesian jog: solved backwards through IK and refused if any joint\nwould exceed a soft limit.",
+        "operationId": "jog_linear_api_v1_motion_jog_linear_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinearJogRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Jog Linear"
+      }
+    },
+    "/api/v1/motion/move": {
+      "post": {
+        "description": "Move the TCP to an absolute pose, pre-flighted.\n\nEvery refusal below happens BEFORE anything reaches the wire.",
+        "operationId": "move_api_v1_motion_move_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Move",
+        "tags": [
+          "motion"
+        ]
+      }
+    },
+    "/api/v1/motion/preview": {
+      "post": {
+        "description": "Forward kinematics: TCP pose for a given joint configuration.",
+        "operationId": "preview_api_v1_motion_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "type": "number"
+                },
+                "title": "Joints",
+                "type": "array"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview"
+      }
+    },
+    "/api/v1/motion/queue": {
+      "get": {
+        "description": "How many motion commands remain queued. Zero with motion_done\nfalse means the last is executing.",
+        "operationId": "motion_queue_api_v1_motion_queue_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Motion Queue",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/motion/stop": {
+      "post": {
+        "description": "Functional stop of gateway-initiated motion. NOT an emergency or protective stop.\n\nStops jogs (ImmStopJOG), program-space moves (StopMotion) and path runners.\nDoes not stop pendant motion, controller Lua programs, other LAN clients,\nor passthrough commands. Always returns 200.",
+        "operationId": "stop_api_v1_motion_stop_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Stop"
+      }
+    },
+    "/api/v1/points/tables/{name}": {
+      "get": {
+        "operationId": "get_point_table_api_v1_points_tables__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Point Table",
+        "tags": [
+          "backup"
+        ]
+      },
+      "put": {
+        "description": "Restore a point table. Overwrites taught positions; gated\nlike a motion command.",
+        "operationId": "restore_point_table_api_v1_points_tables__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PointTableRestore"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore Point Table",
+        "tags": [
+          "backup"
+        ]
+      }
+    },
+    "/api/v1/points/tables/{name}/switch": {
+      "post": {
+        "description": "Make a point table the active one. An empty name reverts\nprograms to their un-applied form.",
+        "operationId": "switch_point_table_api_v1_points_tables__name__switch_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Switch Point Table",
+        "tags": [
+          "backup"
+        ]
+      }
+    },
+    "/api/v1/poses": {
+      "get": {
+        "operationId": "list_poses_api_v1_poses_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Poses",
+        "tags": [
+          "poses"
+        ]
+      }
+    },
+    "/api/v1/poses/program": {
+      "post": {
+        "description": "Turn a list of named poses into a runnable Lua program.\n\nReturns the source. It is deliberately NOT uploaded or run here:\ngenerating a program is safe, and running one moves the arm, so they\nstay separate calls with separate gates. Upload it with\n`PUT /api/v1/programs/{name}`, check it with `.../validate`, then run\nit through `/api/v1/execution/run`.",
+        "operationId": "generate_api_v1_poses_program_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProgramBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Generate Api V1 Poses Program Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Generate",
+        "tags": [
+          "poses"
+        ]
+      }
+    },
+    "/api/v1/poses/{name}": {
+      "delete": {
+        "operationId": "delete_pose_api_v1_poses__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Pose",
+        "tags": [
+          "poses"
+        ]
+      },
+      "get": {
+        "operationId": "get_pose_api_v1_poses__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Pose",
+        "tags": [
+          "poses"
+        ]
+      },
+      "put": {
+        "description": "Write a pose explicitly -- from a CAD position, a calculation, or\nanother cell.",
+        "operationId": "put_pose_api_v1_poses__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PoseBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Pose",
+        "tags": [
+          "poses"
+        ]
+      }
+    },
+    "/api/v1/poses/{name}/capture": {
+      "post": {
+        "description": "Record where the arm is now.\n\nJoints and TCP come from ONE telemetry frame, so the two\nrepresentations cannot disagree. Telemetry is used rather than the\nRPC position getters because those answer `error 14` while the\ncontroller is faulted -- which is exactly when someone is most likely\nto be hand-guiding the arm around and marking positions.",
+        "operationId": "capture_api_v1_poses__name__capture_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaptureBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Capture",
+        "tags": [
+          "poses"
+        ]
+      }
+    },
+    "/api/v1/poses/{name}/rename": {
+      "post": {
+        "operationId": "rename_api_v1_poses__name__rename_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename",
+        "tags": [
+          "poses"
+        ]
+      }
+    },
+    "/api/v1/programs": {
+      "get": {
+        "description": "Programs uploaded through this gateway; not the controller's\ndirectory (GetLuaList is quarantined).",
+        "operationId": "list_programs_api_v1_programs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Programs",
+        "tags": [
+          "programs"
+        ]
+      }
+    },
+    "/api/v1/programs/{name}": {
+      "delete": {
+        "operationId": "delete_program_api_v1_programs__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Program",
+        "tags": [
+          "programs"
+        ]
+      },
+      "get": {
+        "operationId": "download_program_api_v1_programs__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Program",
+        "tags": [
+          "programs"
+        ]
+      },
+      "put": {
+        "operationId": "upload_program_api_v1_programs__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/fws__programs_api__UploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Program",
+        "tags": [
+          "programs"
+        ]
+      }
+    },
+    "/api/v1/programs/{name}/load": {
+      "post": {
+        "operationId": "load_program_api_v1_programs__name__load_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Load Program",
+        "tags": [
+          "programs"
+        ]
+      }
+    },
+    "/api/v1/programs/{name}/select": {
+      "post": {
+        "description": "Load a program and optionally start it, with the same guards\nas run: motion lock, confirmation, non-faulted controller.",
+        "operationId": "select_program_api_v1_programs__name__select_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Select Program",
+        "tags": [
+          "programs"
+        ]
+      }
+    },
+    "/api/v1/programs/{name}/validate": {
+      "post": {
+        "description": "Check a program's motion targets without running it.\n\nSolves each literal motion target backwards through the controller's\nkinematics against its soft limits. Read `unchecked` before trusting\n`safe_to_run`: point names and computed poses cannot be checked.",
+        "operationId": "validate_program_api_v1_programs__name__validate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Program",
+        "tags": [
+          "programs"
+        ]
+      }
+    },
+    "/api/v1/recordings": {
+      "get": {
+        "operationId": "list_recordings_api_v1_recordings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Recordings",
+        "tags": [
+          "recordings"
+        ]
+      }
+    },
+    "/api/v1/recordings/finish": {
+      "post": {
+        "operationId": "finish_api_v1_recordings_finish_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Finish",
+        "tags": [
+          "recordings"
+        ]
+      }
+    },
+    "/api/v1/recordings/start": {
+      "post": {
+        "operationId": "start_api_v1_recordings_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start",
+        "tags": [
+          "recordings"
+        ]
+      }
+    },
+    "/api/v1/recordings/{name}": {
+      "delete": {
+        "operationId": "delete_api_v1_recordings__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete",
+        "tags": [
+          "recordings"
+        ]
+      },
+      "get": {
+        "operationId": "download_api_v1_recordings__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "jsonl",
+              "pattern": "^(jsonl|csv)$",
+              "title": "Format",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download",
+        "tags": [
+          "recordings"
+        ]
+      }
+    },
+    "/api/v1/robot": {
+      "get": {
+        "description": "Identity: model, firmware, mounting, and the sub-device versions.",
+        "operationId": "robot_identity_api_v1_robot_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Robot Identity",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/robot/enable": {
+      "post": {
+        "operationId": "robot_enable_api_v1_robot_enable_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnableRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Robot Enable"
+      }
+    },
+    "/api/v1/robot/frames/active": {
+      "get": {
+        "description": "Which tool and work frame the pose numbers are expressed in.",
+        "operationId": "active_frames_api_v1_robot_frames_active_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Active Frames",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/robot/limits": {
+      "get": {
+        "operationId": "limits_api_v1_robot_limits_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Limits"
+      }
+    },
+    "/api/v1/robot/payload": {
+      "get": {
+        "operationId": "get_payload_api_v1_robot_payload_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Payload",
+        "tags": [
+          "control-layer"
+        ]
+      },
+      "put": {
+        "description": "Set payload mass. Confirmation required: payload feeds the\ndynamic model and collision detection.",
+        "operationId": "set_payload_api_v1_robot_payload_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/fws__control_api__PayloadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Payload",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/robot/pose/flange": {
+      "get": {
+        "description": "Flange pose, before the tool transform (unlike /state, which\nreports the TCP).",
+        "operationId": "flange_pose_api_v1_robot_pose_flange_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Flange Pose",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/robot/speed": {
+      "put": {
+        "description": "Global speed override, percent.",
+        "operationId": "set_speed_api_v1_robot_speed_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpeedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Speed",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/robot/state": {
+      "get": {
+        "description": "Consolidated robot state.\n\nMotion and pose come from the 8083 stream; the rest via RPC. Telemetry\nage is reported as `stale`.",
+        "operationId": "robot_state_api_v1_robot_state_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Robot State",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/robot/velocity": {
+      "get": {
+        "description": "Actual and commanded velocity, joint and Cartesian.\n\nRead over XML-RPC (the SDK's state struct is the wrong shape on this\nfirmware). Actual vs commanded distinguishes \"not moving\" from \"told\nnot to move\", which the 8083 stream cannot.",
+        "operationId": "velocity_api_v1_robot_velocity_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Velocity",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/sensors/force": {
+      "get": {
+        "description": "Wrist force/torque from the 8083 stream at ~10 Hz.\n\nThese numbers include the tool's weight and are NOT gravity-compensated:\n\"RCS\" is the reference coordinate system (a frame transform), not\ncompensation.",
+        "operationId": "force_api_v1_sensors_force_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Force",
+        "tags": [
+          "force"
+        ]
+      }
+    },
+    "/api/v1/sensors/joint_torques": {
+      "get": {
+        "description": "Per-joint torque in N\u00b7m from the stream at offset 108.\nIndependent of the wrist sensor (from the joint drives).",
+        "operationId": "joint_torques_api_v1_sensors_joint_torques_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Joint Torques",
+        "tags": [
+          "force"
+        ]
+      }
+    },
+    "/api/v1/state": {
+      "get": {
+        "operationId": "state_api_v1_state_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "State"
+      }
+    },
+    "/api/v1/system/health": {
+      "get": {
+        "operationId": "health_api_v1_system_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/api/v1/system/recovery": {
+      "get": {
+        "description": "Is the controller back, and how far through booting is it?\nAnswers against the boot baseline, not a single ping.",
+        "operationId": "recovery_api_v1_system_recovery_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Recovery",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/v1/system/shutdown": {
+      "post": {
+        "description": "Shut the controller down. There is no remote way back;\ndeliberately not called restart.",
+        "operationId": "shutdown_api_v1_system_shutdown_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShutdownRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Shutdown",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/v1/system/version": {
+      "get": {
+        "operationId": "version_api_v1_system_version_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Version"
+      }
+    }
+  }
+}

@@ -174,6 +174,16 @@ Pass `--url http://localhost:8000` to run any of them against a gateway you
 started yourself, including one connected to a real arm. Read `SAFETY.md`
 first if you do.
 
+## Stability
+
+FWS is pre-1.0, but the API surface does not change silently. `openapi.json`
+is committed and CI fails if the app drifts from it, so every change is a
+reviewed commit; [`VERSIONING.md`](VERSIONING.md) states which changes are
+additive (any release) and which are breaking (changelog + CI classification).
+The WebSocket streams, which OpenAPI cannot describe, are documented in
+[`WEBSOCKETS.md`](WEBSOCKETS.md). Pin an exact alpha while pre-1.0:
+`fairino-fws==0.1.0a14`.
+
 ## Development
 
 The whole gateway runs against an in-process simulator, so you can develop with

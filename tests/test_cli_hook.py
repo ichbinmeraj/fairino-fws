@@ -55,13 +55,24 @@ class TestConfigureAppHook:
         import uvicorn
         monkeypatch.setattr(uvicorn, "run", fake_run)
 
-        rc = cli.main(["--simulator"], configure_app=mount_something)
-        assert rc == 0
+        # This mounts onto the module-level app -- exactly as the console
+        # does -- so the added route must be removed afterwards, or it leaks
+        # into every later test that reads the app's surface (the contract
+        # snapshot, the served-paths checks). A test that mutates a global
+        # restores it.
+        from fws.app import app as shared_app
+        before = list(shared_app.router.routes)
+        try:
+            rc = cli.main(["--simulator"], configure_app=mount_something)
+            assert rc == 0
 
-        client = TestClient(started["app"])
-        assert client.get("/console/probe").text == "mounted"
-        # The API must be untouched by whatever was mounted.
-        assert client.get("/").json()["service"] == "fws"
+            client = TestClient(started["app"])
+            assert client.get("/console/probe").text == "mounted"
+            # The API must be untouched by whatever was mounted.
+            assert client.get("/").json()["service"] == "fws"
+        finally:
+            shared_app.router.routes[:] = before
+            shared_app.openapi_schema = None
 
     def test_hook_does_not_run_when_startup_checks_refuse(self, monkeypatch):
         """A refused gateway must not let a package mount onto it anyway."""

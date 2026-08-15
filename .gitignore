@@ -31,3 +31,6 @@ programs.json
 # R&D material — see internal/README.md. Kept in the working tree, never
 # published. The public repository is the FWS product only.
 internal/
+
+recordings/
+poses.json
