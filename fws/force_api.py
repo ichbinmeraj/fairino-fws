@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from .access import full_access
 from .driver import RobotError
 from .protocol.lua_bridge import (
     ARGUMENT_ORDER_CONFLICTS,
@@ -193,7 +194,7 @@ def build(get_driver, get_telemetry, get_control, audit) -> APIRouter:
                     x_fws_control_token: str | None = Header(default=None)):
         """Tell the sensor what hangs below it. Confirmation
         required: a wrong mass biases every force reading."""
-        if not req.confirm:
+        if not (req.confirm or full_access()):
             raise HTTPException(422, "confirm=true required: wrong "
                                      "compensation silently biases every "
                                      "force reading")
@@ -210,7 +211,7 @@ def build(get_driver, get_telemetry, get_control, audit) -> APIRouter:
              x_fws_control_token: str | None = Header(default=None)):
         """Tare the sensor. Do this with the tool hanging free and
         the arm still, or contact force is baked into the offset."""
-        if not req.confirm:
+        if not (req.confirm or full_access()):
             raise HTTPException(422, "confirm=true required: zero the sensor "
                                      "only with the tool free and the arm "
                                      "still")
@@ -227,7 +228,7 @@ def build(get_driver, get_telemetry, get_control, audit) -> APIRouter:
         """Turn the force sensor on or off. Turning it off silently
         removes force-based protection (guards, compliance,
         insertion)."""
-        if not req.confirm:
+        if not (req.confirm or full_access()):
             raise HTTPException(422, "confirm=true required")
         _lock("config", x_fws_control_token)
         _call("FT_Activate", int(req.state))

@@ -7,7 +7,7 @@ import pathlib
 import tomllib
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -97,6 +97,18 @@ class LimitSettings(BaseModel):
 class FeatureSettings(BaseModel):
     """Optional features, all off by default."""
 
+    full_access: bool = Field(
+        default=False,
+        description="DEVELOPER FULL ACCESS. Turns off every software guard at "
+                    "once: no control lease, no confirmations, no jog bounds "
+                    "or soft-limit pre-flight, every command callable raw "
+                    "including the refused ones, the flags below forced on, "
+                    "and the startup safety refusals downgraded to warnings. A "
+                    "wrong command can then power off or brick the controller "
+                    "with no remote recovery, and a runaway move is stopped "
+                    "only by the physical E-stop. Only on a cell you control "
+                    "physically. See fws/access.py and SAFETY.md.",
+    )
     enable_movel: bool = Field(
         default=False,
         description="MoveL's argument layout produced an unintended ~300 mm "
@@ -291,6 +303,26 @@ class Settings(BaseSettings):
         default_factory=ControllerServicesSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
 
+    @model_validator(mode="after")
+    def _full_access_forces_flags_on(self) -> Settings:
+        """Full access is one switch, so make it flip everything.
+
+        The dependent flags are turned on here, once, so existing read-sites
+        need no change. The command-level guards (lease, confirm, refused, jog
+        bounds) lift separately via fws/access.py, because those live in
+        request handlers rather than config.
+        """
+        if self.features.full_access:
+            self.features.enable_movel = True
+            self.features.enable_command_passthrough = True
+            self.features.enable_unverified_commands = True
+            self.features.enable_shutdown = True
+            self.services.ftp_enabled = True
+            self.services.shell_enabled = True
+            self.services.qconn_enabled = True
+            self.services.lua_validate_enabled = True
+        return self
+
     def check_safe_to_start(self) -> list[str]:
         """Refusal reasons; empty list means safe to start."""
         problems: list[str] = []
@@ -344,7 +376,22 @@ class Settings(BaseSettings):
                 f"path on the controller; FWS will not expose them without an "
                 f"api_keys_file, on loopback or otherwise. Set auth.api_keys_"
                 f"file, or turn them off.")
+        if problems and self.features.full_access:
+            # The startup gate is one of the guards full access takes off. The
+            # reasons are still returned by startup_warnings() and printed.
+            return []
         return problems
+
+    def startup_warnings(self) -> list[str]:
+        """What check_safe_to_start() WOULD have refused, under full access."""
+        if not self.features.full_access:
+            return []
+        keep = self.features.full_access
+        try:
+            self.features.full_access = False
+            return self.check_safe_to_start()
+        finally:
+            self.features.full_access = keep
 
     def summary(self) -> dict[str, Any]:
         """Startup banner content. Never includes secrets."""
@@ -355,6 +402,8 @@ class Settings(BaseSettings):
             "loopback_only": self.server.is_loopback,
             "read_only": self.server.read_only,
             "auth": "enabled" if self.auth.enabled else "DISABLED (loopback)",
+            "full_access": ("ON -- every software guard is off"
+                            if self.features.full_access else False),
             "movel": self.features.enable_movel,
             "passthrough": self.features.enable_command_passthrough,
             "controller_services": [

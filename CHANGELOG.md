@@ -4,7 +4,40 @@ All notable changes to FWS are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0a1] — unreleased
+## [0.1.0a2] — unreleased
+
+### Added
+
+- **`features.full_access` / `--full-access`: developer mode.** One switch
+  that takes every software guard off at once — no control lease, no
+  confirmations, no jog bounds or soft-limit pre-flight, all 594 commands
+  callable raw including the ones normally refused at both the HTTP and
+  driver layers, the optional feature flags and controller services forced
+  on, and the startup safety refusals downgraded to printed warnings.
+
+  It is **off by default**: a default install behaves exactly as before, and
+  the guarded behaviour stays under test. When it is on, the startup banner,
+  `GET /` and the config summary all say so.
+
+  **This removes the rails that stop a mistake from reaching the
+  controller.** A wrong argument can power the controller off one-way or
+  write firmware, with no remote way back, and a runaway move is stopped
+  only by the physical E-stop. Use it on a cell you control physically. FWS
+  remains not a safety device; see SAFETY.md.
+
+- The simulator now answers `?source=controller` file listings from its own
+  stores, building a real `fr_user_data.tar.gz` from whatever has been
+  uploaded to it. Point tables and pendant-written programs enumerate
+  against `fws --simulator` exactly as against hardware.
+
+### Changed
+
+- Jog `step` and `vel` ceilings moved from the request models into the
+  handlers, so `full_access` can lift them. `direction` keeps its model
+  bound: that one is about meaning (a truthy `-1` jogs positive), not
+  magnitude.
+
+## [0.1.0a1] — 2026-08-15
 
 FWS is an API-only gateway; user interfaces live in separate packages.
 

@@ -38,6 +38,13 @@ def build_parser() -> argparse.ArgumentParser:
                    help="serve observation only: every non-GET operation is "
                         "refused, including stop. The gateway cannot command "
                         "the arm at all in this mode")
+    p.add_argument("--full-access", dest="features.full_access",
+                   action="store_true", default=None,
+                   help="DEVELOPER MODE: turn off every software guard -- "
+                        "leases, confirmations, jog bounds, refused commands, "
+                        "disabled features and the startup safety checks. A "
+                        "wrong command can then brick or power off the "
+                        "controller. Only on a cell you control physically.")
     p.add_argument("--simulator", "--sim", action="store_true",
                    help="run against a built-in simulated controller instead "
                         "of a robot. Needs no hardware; reproduces the "
@@ -48,6 +55,22 @@ def build_parser() -> argparse.ArgumentParser:
                    help="print the resolved configuration and exit")
     return p
 
+
+FULL_ACCESS_BANNER = """
+  ┌────────────────────────────────────────────────────────────┐
+  │  FULL ACCESS.  Every software guard is OFF.                │
+  │                                                            │
+  │  No control lease is required. No confirmation is asked.   │
+  │  Jog bounds and the soft-limit pre-flight are lifted. All  │
+  │  594 commands are callable raw, including the ones that    │
+  │  write firmware, wedge the RPC channel, or power the       │
+  │  controller off one-way with no remote way back.           │
+  │                                                            │
+  │  A wrong argument can now brick this controller, and a     │
+  │  runaway move is stopped only by the physical E-stop.      │
+  │  Stand where you can reach it.                             │
+  └────────────────────────────────────────────────────────────┘
+"""
 
 SIM_BANNER = """
   ┌────────────────────────────────────────────────────────────┐
@@ -130,6 +153,11 @@ def main(
         for p in problems:
             print(f"  - {p}", file=sys.stderr)
         return 3
+
+    if settings.features.full_access:
+        print(FULL_ACCESS_BANNER, file=sys.stderr)
+        for w in settings.startup_warnings():
+            print(f"  would normally refuse: {w}", file=sys.stderr)
 
     if args.check:
         print("configuration OK")

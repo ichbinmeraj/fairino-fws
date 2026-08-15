@@ -12,6 +12,8 @@ import xmlrpc.client
 from dataclasses import dataclass
 from typing import Any, ClassVar
 
+from .access import full_access
+
 FORBIDDEN = ("system.listMethods", "system.methodHelp", "system.methodSignature")
 
 # Commands that must never reach the wire. Enforced here in the driver, below
@@ -103,9 +105,10 @@ class RobotDriver:
         """Send one command. allow_refused is a keyword-only escape hatch
         for the single route (shutdown) that legitimately needs a refused
         command."""
-        if method in FORBIDDEN or method.startswith("system."):
+        if not full_access() and (method in FORBIDDEN
+                                  or method.startswith("system.")):
             raise RobotError(f"introspection is blocked: {method}")
-        if method in REFUSED and not allow_refused:
+        if method in REFUSED and not allow_refused and not full_access():
             raise RobotError(
                 f"{method} is refused by FWS and will not be sent. It writes "
                 f"firmware, halts the controller, or wedges the RPC channel. "

@@ -19,6 +19,7 @@ from __future__ import annotations
 import ast
 from typing import Any
 
+from .access import full_access
 from .driver import REFUSED as DRIVER_REFUSED
 from .protocol.commands import COMMANDS, SDK_DEFECTS, VERIFIED_COMMANDS
 from .protocol.recovered_rpcs import RECOVERED
@@ -109,7 +110,15 @@ def lookup(name: str):
 
 
 def check_callable(cmd) -> None:
-    """The refusals that no configuration, lease or confirmation lifts."""
+    """The refusals that no lease or confirmation lifts.
+
+    One thing lifts them: features.full_access (fws/access.py). With it on
+    every command is callable raw, including the ones that write firmware or
+    halt the controller. The driver's REFUSED list lifts on the same switch,
+    so this is not merely moved down a layer.
+    """
+    if full_access():
+        return
     owner = TYPED_ROUTE_OWNED.get(cmd.wire_name) or TYPED_ROUTE_OWNED.get(
         cmd.python_name)
     if owner is not None:
@@ -168,6 +177,11 @@ def gate(cmd, *, confirm: bool, token: str | None, control) -> str:
     """Authorise one invocation; returns the actor to record, or
     raises. Missing prerequisites are reported together."""
     check_callable(cmd)
+    if full_access():
+        # No lease, no confirmation, no class distinction. The caller still
+        # writes the audit line before transmission.
+        lease = control.held_by("motion")
+        return lease.client_id if lease else "full-access"
     domain, needs_confirm = requirements(cmd)
 
     missing: list[str] = []

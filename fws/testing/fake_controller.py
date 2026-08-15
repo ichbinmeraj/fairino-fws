@@ -211,6 +211,7 @@ class FakeController:
         self._threads: list[threading.Thread] = []
 
         self.calls: list[tuple[str, tuple]] = []      # for assertions in tests
+        self.shut_down = False                       # ShutDownRobotOS reached
         self._frame_counter = 0
         self._stream_client_connected = False
         self._pending_upload: str | None = None
@@ -328,6 +329,15 @@ class FakeController:
 
         def ok(*payload):
             return [0, *payload]
+
+        # -- the one-way one ---------------------------------------------
+        def ShutDownRobotOS(delay=0):
+            """Modelled only so full-access tests can prove the call reaches
+            the wire. On hardware this powers the controller off with no
+            remote way back; the fake records it and stays up."""
+            self._record("ShutDownRobotOS", delay)
+            self.shut_down = True
+            return ok()
 
         # -- identity ----------------------------------------------------
         def GetSoftwareVersion():
@@ -535,8 +545,15 @@ class FakeController:
             if file_type in (2, 3):
                 if self._prepared_backup != name:
                     return -1        # prepare must come first, for this name
-                self._pending_download = self.backups.get(
-                    name, b"fake bundle for " + name.encode())
+                payload = self.backups.get(name)
+                if payload is None and file_type == 3:
+                    # The user-data bundle is a REAL archive of the fake's
+                    # stores, so ?source=controller listings work against the
+                    # simulator exactly as against hardware.
+                    payload = self._build_user_data()
+                if payload is None:
+                    payload = b"fake bundle for " + name.encode()
+                self._pending_download = payload
                 self._prepared_backup = None
                 self._open_transfer_port(upload=False)
                 return 0
@@ -792,7 +809,8 @@ class FakeController:
         def GetRobotInstallAngle():
             return ok(0.0, 0.0)
 
-        for fn in (GetSoftwareVersion, GetSDKVersion, GetControllerIP,
+        for fn in (ShutDownRobotOS,
+                   GetSoftwareVersion, GetSDKVersion, GetControllerIP,
                    GetRobotErrorCode, GetRobotMotionDone,
                    GetActualJointPosDegree, GetActualTCPPose,
                    GetJointSoftLimitDeg, GetDefaultTransVel, GetProgramState,
@@ -960,6 +978,27 @@ class FakeController:
                 return (f"{where} failed to query the database "
                         f"(the data does not exist)")
         return "success"
+
+    def _build_user_data(self) -> bytes:
+        """fr_user_data.tar.gz, built from this fake's CURRENT stores.
+
+        The real controller's archive is its file tree under root/web/file/;
+        the fake's equivalent is whatever has been uploaded to it. Built on
+        demand rather than seeded, so causality matches hardware: a listing
+        taken after an upload shows the upload. Tests needing a specific tree
+        override self.backups["fr_user_data.tar.gz"].
+        """
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+            def add(path: str, body: bytes) -> None:
+                info = tarfile.TarInfo(path)
+                info.size = len(body)
+                tar.addfile(info, io.BytesIO(body))
+            for name, body in sorted(self.files.items()):
+                add("root/web/file/user/" + name, body)
+            for name, body in sorted(self.point_tables.items()):
+                add("root/web/file/points/point_table/" + name, body)
+        return buf.getvalue()
 
     def _build_rblog(self) -> bytes:
         """rblog.tar.gz with the ordering trap intact: the live verdicts are in

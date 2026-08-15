@@ -13,6 +13,7 @@ import base64
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from .access import full_access
 from .services import (
     ServiceAuthError,
     ServiceError,
@@ -185,7 +186,7 @@ def build(get_settings, get_control, audit) -> APIRouter:
     def ftp_upload(req: FtpWriteRequest,
                    x_fws_control_token: str | None = Header(default=None)):
         _require_flag("ftp_enabled", "FTP file access")
-        if not req.confirm:
+        if not (req.confirm or full_access()):
             raise HTTPException(400, (
                 "writing a file over FTP bypasses the controller's compile-"
                 "and-register step: a Lua program put this way lands on disk "
@@ -258,7 +259,7 @@ def build(get_settings, get_control, audit) -> APIRouter:
                     "to its first token, which a shell metacharacter defeats. "
                     "Remove them, or clear services.shell_allowlist to accept "
                     "an unconstrained root shell."))
-        if not req.confirm:
+        if not (req.confirm or full_access()):
             raise HTTPException(400, "resend with confirm=true: this runs as "
                                      "root on the controller")
         _lock("config", x_fws_control_token)
@@ -288,7 +289,8 @@ def build(get_settings, get_control, audit) -> APIRouter:
                 "the process to signal is firmware-specific. Set it to the "
                 "verified command for your controller (test it once over "
                 "POST /controller/shell first)."))
-        if not (req.confirm and req.i_understand_the_arm_may_move_or_stop):
+        if not ((req.confirm and req.i_understand_the_arm_may_move_or_stop)
+                or full_access()):
             raise HTTPException(422, (
                 "both confirm and i_understand_the_arm_may_move_or_stop are "
                 "required: restarting the application interrupts whatever the "
@@ -316,7 +318,8 @@ def build(get_settings, get_control, audit) -> APIRouter:
                 "services.shell_reboot_command is not set. A reboot cuts "
                 "power to the arm; set this only if the cell is safe to "
                 "de-energise remotely."))
-        if not (req.confirm and req.i_have_physical_or_switched_power):
+        if not ((req.confirm and req.i_have_physical_or_switched_power)
+                or full_access()):
             raise HTTPException(422, (
                 "both confirm and i_have_physical_or_switched_power are "
                 "required: a reboot de-energises the arm and the controller "
