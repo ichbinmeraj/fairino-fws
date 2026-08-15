@@ -37,6 +37,7 @@ from .files_api import build as build_files_api
 from .force_api import build as build_force_api
 from .invoke_api import build as build_invoke_api
 from .lua_api import router as lua_router
+from .model_api import build as build_model_api
 from .poses import PoseStore
 from .poses_api import build as build_poses_api
 from .programs_api import build as build_programs_api
@@ -751,6 +752,9 @@ app.include_router(build_backup_api(
 ))
 # Named poses, stored by the gateway. Not the controller's point tables --
 # this firmware cannot write one named point into a table.
+# The measured kinematic model, as URDF. No URDF matched to this firmware
+# is published anywhere, and the vendor's is measurably worse.
+app.include_router(build_model_api(lambda: driver))
 app.include_router(build_poses_api(
     lambda: driver, lambda: telemetry, lambda: poses, lambda: control, _audit,
 ))

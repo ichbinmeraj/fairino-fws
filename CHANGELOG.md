@@ -6,6 +6,25 @@ All notable changes to FWS are documented here. The format follows
 
 ## [0.1.0a6] — unreleased
 
+### Added
+
+- **The measured robot model, served as URDF** — `GET /api/v1/model` and
+  `GET /api/v1/model/urdf`. No URDF matched to this firmware is published
+  anywhere, and the vendor's rounded lengths are measurably worse than this
+  controller's own, so RViz, Foxglove or a three.js scene can now draw this
+  arm off `/ws/state` with nothing else installed.
+
+  The chain is the measured one (59 `GetForwardKin` samples, 0.0000 mm RMS)
+  and the joint limits come from the controller when it answers, falling
+  back to a full turn rather than inventing a tighter bound — a planner that
+  trusts a fabricated limit refuses reachable poses.
+
+  The visual geometry is a primitive stand-in derived from the link lengths,
+  said so in the document itself; `?visuals=none` omits it. The real meshes
+  ship with `fairino-fws-console`. The chain is hardware-verified, but this
+  *document* has not been checked in a URDF consumer against the live arm,
+  and `/api/v1/model` says so.
+
 ### Fixed
 
 - **The watchdog stop leaves an audit line.** The gateway stopping the arm
