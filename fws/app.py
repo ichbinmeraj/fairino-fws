@@ -20,6 +20,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from . import capabilities as caps_mod
@@ -38,6 +39,7 @@ from .files_api import build as build_files_api
 from .force_api import build as build_force_api
 from .invoke_api import build as build_invoke_api
 from .lua_api import router as lua_router
+from .metrics import render as render_metrics
 from .model_api import build as build_model_api
 from .poses import PoseStore
 from .poses_api import build as build_poses_api
@@ -791,6 +793,31 @@ async def ws_events(ws: WebSocket):
         pass
     finally:
         sub.close()
+
+
+@app.get("/api/v1/metrics", response_class=PlainTextResponse)
+def metrics():
+    """Prometheus exposition of the counters FWS already keeps.
+
+    Deliberately NOT on the always-open list: it carries live joint
+    positions, and this gateway treats live state as needing a key.
+    """
+    caps = None
+    with contextlib.suppress(Exception):
+        d = capabilities.as_dict()
+        caps = {k: d.get(k) for k in ("available", "absent", "unknown")}
+    return PlainTextResponse(
+        render_metrics(
+            telemetry_snapshot=telemetry.snapshot(),
+            errors=_errors,
+            watchdog=control.watchdog(),
+            audit_health=audit.health(),
+            bus_health=bus.health(),
+            recorder_health=recorder.health(),
+            capabilities=caps,
+            lock_holders=control.holders(),
+        ),
+        media_type="text/plain; version=0.0.4; charset=utf-8")
 
 
 @app.get("/api/v1/events/stream")

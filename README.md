@@ -109,7 +109,7 @@ All routes are under `/api/v1`. The full, live specification is served at
 | `/sensors`, `/force` | force/torque, payload, sensor setup |
 | `/backup`, `/points` | backup and point-table restore |
 | `/commands`, `/invoke` | the RPC registry and the gated invoker |
-| `/system` | version, health, ports baseline |
+| `/system`, `/metrics` | version, health, ports baseline, Prometheus metrics |
 
 Stop and health are never authenticated: a client whose key is wrong or missing
 must still be able to stop the arm and probe health.
