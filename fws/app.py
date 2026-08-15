@@ -42,6 +42,8 @@ from .model_api import build as build_model_api
 from .poses import PoseStore
 from .poses_api import build as build_poses_api
 from .programs_api import build as build_programs_api
+from .recorder import SAMPLE_HZ, FlightRecorder
+from .recorder_api import build as build_recorder_api
 from .runners import AbortRegistry
 from .services_api import build as build_services_api
 from .system_api import build as build_system_api
@@ -83,6 +85,7 @@ async def _lifespan(_: FastAPI):
     # still serves /health and /capabilities.
     threading.Thread(target=_safe_probe, daemon=True).start()
     threading.Thread(target=_error_poller, daemon=True).start()
+    threading.Thread(target=_recorder_sampler, daemon=True).start()
     try:
         yield
     finally:
@@ -117,6 +120,7 @@ edges = EdgeDetector(bus)
 audit.on_record = bus.publish
 abortables = AbortRegistry()
 poses = PoseStore(settings.server.data_dir / "poses.json")
+recorder = FlightRecorder(settings.server.data_dir)
 
 
 def _on_lease_lapse(reason: str, lease) -> None:
@@ -145,7 +149,8 @@ def create_app(new_settings: config_mod.Settings | None = None) -> FastAPI:
 
     Route handlers read these globals at call time, so rebinding is sufficient.
     """
-    global settings, driver, telemetry, keys, capabilities, LIMIT_MARGIN, poses
+    global settings, driver, telemetry, keys, capabilities, LIMIT_MARGIN
+    global poses, recorder
     if new_settings is not None:
         settings = new_settings
         # Latch the developer switch before anything can consult it.
@@ -164,6 +169,7 @@ def create_app(new_settings: config_mod.Settings | None = None) -> FastAPI:
         # every trail died with the process.
         audit.path = settings.audit_file()
         poses = PoseStore(settings.server.data_dir / "poses.json")
+        recorder = FlightRecorder(settings.server.data_dir)
     return app
 
 
@@ -182,6 +188,25 @@ def _safe_probe() -> None:
         print(f"[capabilities] probe failed: {e}", flush=True)
 
 
+def _recorder_sampler():
+    """Feed the flight recorder at 10 Hz, matching the 8083 push rate.
+
+    Samples the telemetry snapshot rather than tapping the parser: the
+    recorder must never be able to slow down or break the stream reader.
+    """
+    period = 1.0 / SAMPLE_HZ
+    while True:
+        try:
+            frame = telemetry.snapshot()
+            recorder.feed({**frame,
+                           "error_main": _errors.get("main"),
+                           "error_sub": _errors.get("sub")})
+        except Exception:
+            # Recording is diagnostics. It must never take the gateway down.
+            pass
+        time.sleep(period)
+
+
 _errors: dict = {"main": 0, "sub": 0, "ok": False}
 
 
@@ -191,7 +216,15 @@ def _error_poller():
         try:
             main, sub = driver.error_code()
             _errors.update(main=main, sub=sub, ok=True, msg=None)
+            was_faulted = edges._faulted
             edges.fault(main, sub)
+            # The seconds BEFORE the fault are the ones worth having, and
+            # they are already in the ring. Dump on the rising edge only.
+            if edges._faulted and was_faulted is False:
+                name = recorder.dump(f"fault {main}/{sub}")
+                if name:
+                    bus.publish("recording.dumped", file=name,
+                                main=main, sub=sub)
         except RobotError as e:
             _errors.update(ok=False, msg=str(e))
         snap = telemetry.snapshot()
@@ -277,6 +310,7 @@ def health():
     return {
         "audit": au,
         "events": bus.health(),
+        "recorder": recorder.health(),
         "warnings": warnings,
         "checks_not_run": not_checked,
         "all_checks_ran": not not_checked,
@@ -821,6 +855,8 @@ app.include_router(build_backup_api(
 # The measured kinematic model, as URDF. No URDF matched to this firmware
 # is published anywhere, and the vendor's is measurably worse.
 app.include_router(build_model_api(lambda: driver))
+# Telemetry recordings, and the dump taken automatically on a fault.
+app.include_router(build_recorder_api(lambda: recorder, _audit))
 app.include_router(build_poses_api(
     lambda: driver, lambda: telemetry, lambda: poses, lambda: control, _audit,
 ))
