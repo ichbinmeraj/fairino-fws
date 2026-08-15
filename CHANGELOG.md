@@ -4,7 +4,7 @@ All notable changes to FWS are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0a5] — unreleased
+## [0.1.0a6] — unreleased
 
 ### Fixed
 
@@ -13,6 +13,8 @@ All notable changes to FWS are documented here. The format follows
   single most important thing the audit trail can hold, and it existed only
   as a `print()`. An incident review found the arm stopped and nothing
   saying who or why.
+
+## [0.1.0a5] — 2026-08-15
 
 ### Added
 
