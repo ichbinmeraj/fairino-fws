@@ -4,7 +4,30 @@ All notable changes to FWS are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0a13] — unreleased
+## [0.1.0a14] — unreleased
+
+### Added
+
+- **API contract discipline.** `openapi.json` is now committed to the repo,
+  and CI fails if the running app's surface drifts from it — so the API can
+  only change through a commit a reviewer sees, even pre-1.0.
+  `tools/check_contract.py` regenerates it (`--write`) and classifies a
+  pending change as additive or breaking (`--since <ref>`), dependency-free.
+- **`VERSIONING.md`** states the pre-1.0 promise: additive changes without
+  notice, breaking changes allowed but never silent (changelog + CI
+  classification).
+- **`WEBSOCKETS.md`** documents `/ws/state` and `/ws/events`, which OpenAPI
+  cannot describe. `/ws/state` gains `ts` and `age_s`, so a client can tell a
+  fresh frame from a stale repeat without diffing values a parked arm sends
+  identically.
+
+### Fixed
+
+- A test that exercised the `configure_app` seam mounted a route onto the
+  shared app and never removed it, leaking it into later views of the API
+  surface. It now restores the app's routes.
+
+## [0.1.0a13] — 2026-08-15
 
 ### Added
 

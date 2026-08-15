@@ -762,6 +762,12 @@ async def ws_state(ws: WebSocket):
                 "error_main": _errors.get("main"),
                 "error_sub": _errors.get("sub"),
                 "limits": _limits(),
+                # The frame's timestamp and its age at send, so a client can
+                # tell a fresh frame from a stale repeat without diffing the
+                # values a parked arm sends identically. None before frame one.
+                "ts": t.get("ts"),
+                "age_s": (None if not t.get("ts")
+                          else round(time.time() - t["ts"], 3)),
             }))
             await asyncio.sleep(0.1)     # 10 Hz, matching the 8083 push rate
     except WebSocketDisconnect:

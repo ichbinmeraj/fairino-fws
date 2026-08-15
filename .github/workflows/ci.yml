@@ -84,6 +84,11 @@ jobs:
         # GetRobotEmergencyStopState. See tools/check_terminology.py.
         run: python tools/check_terminology.py
 
+      - name: The committed API contract matches the app
+        run: |
+          pip install -e . >/dev/null
+          python tools/check_contract.py
+
       - name: Refused commands stay refused
         run: |
           pip install -e . >/dev/null
