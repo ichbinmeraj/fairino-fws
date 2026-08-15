@@ -4,7 +4,26 @@ All notable changes to FWS are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0a9] — unreleased
+## [0.1.0a10] — unreleased
+
+### Added
+
+- **Prometheus metrics** at `GET /api/v1/metrics`. A cell gateway on a Pi is
+  exactly what a plant scrapes, and every number already existed inside FWS
+  — what was missing was a format anything could read. Exposed: the robot
+  link (connected, frames, corrupt frames, frame age), the robot (faulted,
+  error code, per-joint position and torque), the safety layer (watchdog
+  health and errors, which lock domains are held), the record (audit events,
+  durability, sink errors, events published, subscribers, fault dumps) and
+  the probed capability counts.
+
+  Hand-rendered rather than adding `prometheus_client` — a text exposition
+  is a dozen lines and this gateway keeps four runtime dependencies. It is
+  **not** on the always-open list: it carries live joint positions, and live
+  state needs a key here. `/health` and stop stay open, so a failed scrape
+  is still distinguishable from a dead gateway.
+
+## [0.1.0a9] — 2026-08-15
 
 ### Added
 
