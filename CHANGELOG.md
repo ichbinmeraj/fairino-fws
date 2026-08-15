@@ -4,7 +4,32 @@ All notable changes to FWS are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0a7] — unreleased
+## [0.1.0a8] — unreleased
+
+### Added
+
+- **Pushed events** — `WS /ws/events` and `GET /api/v1/events/stream` (SSE).
+  To learn that a program finished, a fault latched, or the watchdog stopped
+  the arm, a client had to poll or diff the 10 Hz telemetry stream and infer
+  the edge itself. The watchdog stop was worse: it existed only as a line on
+  stdout, so nothing could react to it.
+
+  Two kinds of message go out: every audit record, so "who commanded what"
+  arrives as it happens; and the edges the gateway is placed to notice —
+  fault latched and cleared, program state changed, telemetry down and back.
+  The first reading is never a transition, so restarting against a faulted
+  controller does not announce a fault that did not just happen.
+  `?topics=motion,fault` filters.
+
+  **A subscriber that stops reading cannot slow down a command.** Each gets a
+  bounded queue; on overflow the *oldest* events are dropped and counted, and
+  the count rides on that subscriber's next event — so a consumer can never
+  mistake a gap for quiet. `publish()` never blocks and never raises.
+
+  The SSE form works from `curl`, so a shell script can react to robot events
+  with nothing installed.
+
+## [0.1.0a7] — 2026-08-15
 
 ### Added
 

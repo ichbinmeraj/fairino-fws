@@ -32,6 +32,7 @@ from .commands_api import build_router
 from .control import DOMAINS, Conflict, ControlLock
 from .control_api import build as build_control_api
 from .driver import RobotDriver, RobotError
+from .eventbus import EdgeDetector, EventBus
 from .events import AuditLog
 from .files_api import build as build_files_api
 from .force_api import build as build_force_api
@@ -109,6 +110,11 @@ telemetry = Telemetry(settings.robot.ip, port=settings.robot.telemetry_port)
 keys = KeyStore(settings.auth.api_keys_file)
 capabilities = Capabilities(driver)
 audit = AuditLog()
+bus = EventBus()
+edges = EdgeDetector(bus)
+# Every audited command is also pushed, so a client learns what
+# happened as it happens instead of polling for it.
+audit.on_record = bus.publish
 abortables = AbortRegistry()
 poses = PoseStore(settings.server.data_dir / "poses.json")
 
@@ -185,8 +191,12 @@ def _error_poller():
         try:
             main, sub = driver.error_code()
             _errors.update(main=main, sub=sub, ok=True, msg=None)
+            edges.fault(main, sub)
         except RobotError as e:
             _errors.update(ok=False, msg=str(e))
+        snap = telemetry.snapshot()
+        edges.stream(bool(snap.get("connected")))
+        edges.program_state(snap.get("program_state"))
         time.sleep(0.5)
 
 
@@ -266,6 +276,7 @@ def health():
 
     return {
         "audit": au,
+        "events": bus.health(),
         "warnings": warnings,
         "checks_not_run": not_checked,
         "all_checks_ran": not not_checked,
@@ -717,6 +728,61 @@ async def ws_state(ws: WebSocket):
             await asyncio.sleep(0.1)     # 10 Hz, matching the 8083 push rate
     except WebSocketDisconnect:
         pass
+
+
+@app.websocket("/ws/events")
+async def ws_events(ws: WebSocket):
+    """Edge-triggered events: commands, faults latching and clearing, the
+    watchdog stopping the arm.
+
+    /ws/state is a 10 Hz sample of what IS; this is a push of what CHANGED.
+    """
+    if keys.configured and keys.identify(ws.query_params.get("key")) is None:
+        await ws.close(code=1008)
+        return
+    topics = ws.query_params.get("topics")
+    sub = bus.subscribe(topics.split(",") if topics else None)
+    await ws.accept()
+    try:
+        while True:
+            # The queue is thread-fed, so read it off the event loop: a
+            # blocking get() here would stall every other request.
+            event = await asyncio.to_thread(sub.get, 1.0)
+            if event is None:
+                # Silence and a dead socket otherwise look identical.
+                await ws.send_text(json.dumps({"kind": "keepalive"}))
+                continue
+            await ws.send_text(json.dumps(event, default=str))
+    except WebSocketDisconnect:
+        pass
+    finally:
+        sub.close()
+
+
+@app.get("/api/v1/events/stream")
+async def events_stream(topics: str | None = None):
+    """The same events as Server-Sent Events, for anything that would rather
+    not hold a WebSocket open (curl, a shell script, an EventSource)."""
+    from fastapi.responses import StreamingResponse
+
+    sub = bus.subscribe(topics.split(",") if topics else None)
+
+    async def gen():
+        try:
+            yield ": FWS event stream\n\n"
+            while True:
+                event = await asyncio.to_thread(sub.get, 1.0)
+                if event is None:
+                    yield ": keepalive\n\n"
+                    continue
+                yield (f"event: {event['kind']}\n"
+                       f"data: {json.dumps(event, default=str)}\n\n")
+        finally:
+            sub.close()
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache",
+                                      "X-Accel-Buffering": "no"})
 
 
 # Routers resolve driver and settings at call time, so create_app() can rebind
