@@ -4,7 +4,29 @@ All notable changes to FWS are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0a8] — unreleased
+## [0.1.0a9] — unreleased
+
+### Added
+
+- **A flight recorder for the arm** — `GET /api/v1/recordings`,
+  `POST /recordings/start`, `POST /recordings/finish`, and per-recording
+  download as JSONL or `?format=csv`.
+
+  When something goes wrong on a cell running undocumented firmware, the
+  question is always "what was the arm doing just before?" The audit trail
+  says what was *commanded*; it never said where the arm actually was, how
+  fast, or what the wrist felt. A rolling 60 s window of telemetry is now
+  kept in memory and dumped beside the audit trail the moment a fault
+  **latches** — on the rising edge, so the file holds the seconds *before*
+  the fault. That needs no route: nobody is at a keyboard when a fault lands.
+
+  Diagnostics never cost availability. The sampler reads the telemetry
+  snapshot rather than tapping the parser, so it cannot slow the stream
+  reader; a write failure stops the recording, counts the error and surfaces
+  it in health rather than raising; and a recording name from a URL cannot
+  escape the directory.
+
+## [0.1.0a8] — 2026-08-15
 
 ### Added
 
