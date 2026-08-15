@@ -217,3 +217,45 @@ class TestTheTypedMotionRoutesAreAudited:
         import inspect
         src = inspect.getsource(app_mod.stop)
         assert src.index("_stop_all()") < src.index('audit.record("motion.stop"')
+
+
+class TestTheWatchdogStopIsRecorded:
+    """The gateway stopping the arm by itself -- because a lease holder went
+    away mid-move -- is the single most important thing the audit trail can
+    hold. It existed only as a print(), so an incident review found the arm
+    stopped and nothing saying who or why."""
+
+    def test_a_lapsed_motion_lease_leaves_an_audit_line(self, fake):
+        with _client(fake) as c:
+            app_mod.control._leases.clear()
+            r = c.post("/api/v1/control",
+                       json={"client_id": "vanisher", "domains": ["motion"],
+                             "ttl_s": 5})
+            lease = app_mod.control.held_by("motion")
+            assert lease is not None and r.status_code == 201
+            # Fire the watchdog path directly: waiting out a real TTL would
+            # add five seconds to the suite for the same assertion.
+            app_mod._on_lease_lapse("expired", lease)
+            events = c.get("/api/v1/events").json()["events"]
+            hit = [e for e in events if e["action"] == "watchdog.stop"]
+            assert hit, "the watchdog stop must be audited"
+            assert hit[0]["actor"] == "vanisher"
+            assert hit[0]["reason"] == "expired"
+            assert "results" in hit[0], "what the stop actually did"
+
+    def test_a_lapsed_lease_without_motion_stops_nothing(self, fake):
+        """Only a motion holder going away is a reason to stop the arm."""
+        with _client(fake) as c:
+            app_mod.control._leases.clear()
+            # The audit log is a process-wide singleton, so an earlier test's
+            # watchdog line is still in it. Compare against events recorded
+            # from HERE, not the whole history.
+            before = c.get("/api/v1/events").json()["events"]
+            mark = max((e["seq"] for e in before), default=0)
+            c.post("/api/v1/control",
+                   json={"client_id": "cfg", "domains": ["config"], "ttl_s": 5})
+            app_mod._on_lease_lapse("expired",
+                                    app_mod.control.held_by("config"))
+            new = [e for e in c.get("/api/v1/events").json()["events"]
+                   if e["seq"] > mark]
+            assert "watchdog.stop" not in [e["action"] for e in new]
