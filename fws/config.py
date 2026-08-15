@@ -94,6 +94,23 @@ class LimitSettings(BaseModel):
     )
 
 
+class AuditSettings(BaseModel):
+    """Where the audit trail is kept.
+
+    In memory it is a bounded deque, so a restart -- or 2000 events -- loses
+    it, and an incident review the next morning has nothing to read. Naming a
+    file makes the trail durable; write failures are counted and surfaced in
+    health rather than swallowed.
+    """
+
+    file: pathlib.Path | None = Field(
+        default=None,
+        description="Append every audit event here as JSON lines. Unset "
+                    "keeps the trail in memory only, where a restart loses "
+                    "it. Relative paths resolve against server.data_dir.",
+    )
+
+
 class FeatureSettings(BaseModel):
     """Optional features, all off by default."""
 
@@ -302,6 +319,14 @@ class Settings(BaseSettings):
     services: ControllerServicesSettings = Field(
         default_factory=ControllerServicesSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
+    audit: AuditSettings = Field(default_factory=AuditSettings)
+
+    def audit_file(self) -> pathlib.Path | None:
+        """The resolved audit path: relative names sit in server.data_dir."""
+        f = self.audit.file
+        if f is None:
+            return None
+        return f if f.is_absolute() else self.server.data_dir / f
 
     @model_validator(mode="after")
     def _full_access_forces_flags_on(self) -> Settings:

@@ -4,7 +4,37 @@ All notable changes to FWS are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0a2] — unreleased
+## [0.1.0a3] — unreleased
+
+### Fixed
+
+Three promises the gateway made and did not keep — the failure mode this
+project condemns everywhere else.
+
+- **`limits.z_floor_mm` now protects something.** The floor was configurable
+  and documented ("refuse any commanded pose below this TCP height") and
+  enforced nowhere: `pathcheck.validate` grew a `z_floor` parameter that no
+  call site ever passed, and the Cartesian jog never checked height at all.
+  Both routes honour it now. The jog solves its target *forward* rather than
+  adding the delta to the current Z — a tool-frame Z step is not a base-frame
+  Z step, and a floor that only works in one frame is worse than none — and
+  refuses when a configured floor cannot be checked.
+
+- **The audit trail can be durable.** `AuditLog` accepted a file path that
+  nothing ever passed, so every trail died with the process. `audit.file`
+  (relative paths resolve against `server.data_dir`) wires it, and
+  `GET /system/health` reports `file`, `durable` and `sink_errors`. The
+  sink's own comment claimed its failures were "visible in health" while
+  nothing counted them; they are now counted and warned about.
+
+- **The typed motion routes are audited.** Jog, linear jog, servo enable,
+  error reset and stop recorded *nothing* — only the router-based surfaces
+  had been given the recorder — so every command the console can send was
+  invisible to the trail that exists to answer "who commanded what". Stop
+  records after the stop, deliberately: nothing sits between a stop request
+  and the stop.
+
+## [0.1.0a2] — 2026-08-15
 
 ### Added
 

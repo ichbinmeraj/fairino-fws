@@ -144,6 +144,9 @@ def create_app(new_settings: config_mod.Settings | None = None) -> FastAPI:
         keys = KeyStore(settings.auth.api_keys_file)
         capabilities = Capabilities(driver)
         LIMIT_MARGIN = settings.limits.limit_margin_deg
+        # The durable sink was supported by AuditLog and wired by nobody, so
+        # every trail died with the process.
+        audit.path = settings.audit_file()
     return app
 
 
@@ -240,7 +243,18 @@ def health():
             "the 8083 telemetry stream is not connected, so live position, "
             "force and motion state are unavailable or stale")
 
+    # The durable audit trail. A sink that has started failing is silent by
+    # construction -- the API keeps answering and the in-memory deque keeps
+    # filling -- so health is the only place it can surface.
+    au = audit.health()
+    if au["sink_errors"]:
+        warnings.append(
+            f"the audit file sink has failed {au['sink_errors']} time(s) "
+            f"(last: {au['sink_last_error']}). Events are in memory only, so "
+            f"a restart loses them.")
+
     return {
+        "audit": au,
         "warnings": warnings,
         "checks_not_run": not_checked,
         "all_checks_ran": not not_checked,
@@ -405,6 +419,7 @@ def robot_enable(req: EnableRequest,
     _require("motion", x_fws_control_token)
     if req.enable and not (req.confirm or full_access()):
         raise HTTPException(400, "enabling requires confirm=true")
+    audit.record("robot.enable", enable=req.enable)
     try:
         driver.set_mode(manual=True)
         driver.enable(req.enable)
@@ -471,6 +486,8 @@ def jog(req: JogRequest,
         if req.vel > settings.limits.jog_max_vel_pct:
             raise HTTPException(422, f"vel exceeds configured limit "
                                      f"{settings.limits.jog_max_vel_pct}%")
+    audit.record("motion.jog", joint=req.joint, direction=req.direction,
+                 step=req.step, vel=req.vel)
     try:
         driver.jog(req.joint, bool(req.direction), req.step, req.vel)
     except RobotError as e:
@@ -532,6 +549,29 @@ def jog_linear(req: LinearJogRequest,
                     f"{target_joints[i]:.2f}deg, outside its safe band "
                     f"[{lo + LIMIT_MARGIN:.1f}, {hi - LIMIT_MARGIN:.1f}]."))
 
+    floor = settings.limits.z_floor_mm
+    if floor is not None and not full_access():
+        # Solve the target FORWARD rather than adding the delta to the
+        # current Z: in the tool frame a Z step is not a base-frame Z step,
+        # and a floor that only works in one frame is worse than none.
+        try:
+            predicted = driver.forward_kin(target_joints)
+        except RobotError as e:
+            # A configured floor that could not be checked must refuse.
+            raise HTTPException(409, (
+                f"blocked: a z_floor of {floor:.1f}mm is configured but the "
+                f"predicted TCP height could not be computed ({e}), so the "
+                f"floor could not be checked.")) from e
+        if predicted[2] < floor:
+            raise HTTPException(409, (
+                f"blocked: moving {AXIS_NAMES[req.axis]} by "
+                f"{delta[req.axis - 1]:+g} would put the TCP at Z "
+                f"{predicted[2]:.1f}mm, below the configured floor "
+                f"{floor:.1f}mm."))
+
+    audit.record("motion.jog_linear", axis=AXIS_NAMES[req.axis],
+                 direction=req.direction, step=req.step, vel=req.vel,
+                 frame=req.frame)
     try:
         driver.jog_linear(req.axis, bool(req.direction), req.step,
                           req.vel, req.frame)
@@ -546,6 +586,7 @@ def jog_linear(req: LinearJogRequest,
 @app.post("/api/v1/errors/reset")
 def reset_errors():
     """Clear latched faults. The condition that caused them may still hold."""
+    audit.record("errors.reset")
     try:
         driver.reset_errors()
         main, sub = driver.error_code()
@@ -617,6 +658,9 @@ def stop():
     or passthrough commands. Always returns 200.
     """
     results = _stop_all()
+    # Recorded AFTER the stop, unlike every other command: nothing may sit
+    # between a stop request and the stop itself.
+    audit.record("motion.stop", results=results)
     return {
         "stop_requested": True,
         "results": results,
