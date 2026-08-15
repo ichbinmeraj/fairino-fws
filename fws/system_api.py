@@ -16,6 +16,7 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from .access import full_access
 from .driver import RobotError
 
 router = APIRouter(prefix="/api/v1/system", tags=["system"])
@@ -130,7 +131,8 @@ def build(get_driver, get_settings, get_control, audit) -> APIRouter:
                 "reboot, so nothing here can power the controller back on. "
                 "Enable it only if you have switched power or someone at the "
                 "machine."))
-        if not (req.confirm and req.i_have_physical_or_switched_power):
+        if not ((req.confirm and req.i_have_physical_or_switched_power)
+                or full_access()):
             raise HTTPException(422, (
                 "both confirm and i_have_physical_or_switched_power are "
                 "required: after this call the controller is off and no API "

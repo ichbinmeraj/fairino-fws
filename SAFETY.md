@@ -43,6 +43,35 @@ These refusals are enforced in code, in the driver, below the API:
    recovery still requires a person at the machine.
 4. **Raw byte writes to robot ports.** Liveness probes connect and close only.
 
+## Developer full access
+
+`features.full_access` (`--full-access`) turns **every software guard above
+off at once**, including all four refusals in the previous section. It exists
+because a developer working on their own cell should not have to fight their
+own tooling: with it on there is no control lease, no confirmation, no jog
+bound, no soft-limit pre-flight, and every command in the registry goes
+through to the controller.
+
+It is off by default and announces itself loudly when on (startup banner,
+`GET /`, config summary).
+
+Understand precisely what you give up:
+
+- **A wrong argument can end the controller.** The firmware-write commands
+  become callable. `ShutDownRobotOS` becomes callable, and there is no API to
+  power the controller back on — recovery needs a person at the machine.
+- **`system.listMethods` becomes callable**, and it can put the controller
+  into a state that needs a restart.
+- **Nothing pre-checks a move.** No jog ceiling, no soft-limit standoff, no
+  IK pre-flight. The physical E-stop is the only thing between a wrong number
+  and the arm.
+- **No lease means no watchdog.** If your client dies mid-move, nothing
+  notices and nothing stops.
+
+Use it on a cell you control physically, standing where you can reach the
+E-stop. Do not run it on a shared or remote cell, and do not leave it on in
+anything resembling production.
+
 ## The robot network is hostile by design
 
 A Fairino controller exposes FTP, telnet and an unauthenticated `qconn` on the

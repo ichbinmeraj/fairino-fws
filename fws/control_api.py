@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from .access import full_access
 from .driver import RobotError
 from .protocol.error_codes import ERROR_CODES, describe
 
@@ -255,7 +256,7 @@ def build(get_driver, get_settings, get_caps, get_control, audit) -> APIRouter:
         """Set a digital output. Confirmation required: a DO commonly
         drives a gripper, clamp or tool changer."""
         _lock("motion", x_fws_control_token)
-        if not req.confirm:
+        if not (req.confirm or full_access()):
             raise HTTPException(400, (
                 "setting a digital output can actuate a gripper or tool; "
                 "resend with confirm=true"))
@@ -267,7 +268,7 @@ def build(get_driver, get_settings, get_caps, get_control, audit) -> APIRouter:
     def set_analog_output(index: int, req: AnalogOutputRequest,
                           x_fws_control_token: str | None = Header(default=None)):
         _lock("motion", x_fws_control_token)
-        if not req.confirm:
+        if not (req.confirm or full_access()):
             raise HTTPException(400, "resend with confirm=true")
         # The wire takes a 12-bit DAC count, not a percent:
         # SetAO(id, value * 40.95, block). 100% -> 4095.
@@ -318,7 +319,7 @@ def build(get_driver, get_settings, get_caps, get_control, audit) -> APIRouter:
             raise HTTPException(422, (
                 "tool frame ids are 1-15 (work object frames are 0-14; the "
                 "ranges differ)"))
-        if not req.confirm:
+        if not (req.confirm or full_access()):
             raise HTTPException(400, (
                 "defining a tool frame changes where the controller believes "
                 "the working point is. Every later move -- and this gateway's "
@@ -343,7 +344,7 @@ def build(get_driver, get_settings, get_caps, get_control, audit) -> APIRouter:
         if not 0 <= frame_id <= 14:
             raise HTTPException(422, (
                 "work object frame ids are 0-14 (tool frames are 1-15)"))
-        if not req.confirm:
+        if not (req.confirm or full_access()):
             raise HTTPException(400, (
                 "redefining a work object frame relocates every position "
                 "expressed in it. Resend with confirm=true"))
@@ -374,7 +375,7 @@ def build(get_driver, get_settings, get_caps, get_control, audit) -> APIRouter:
         """Set payload mass. Confirmation required: payload feeds the
         dynamic model and collision detection."""
         _lock("config", x_fws_control_token)
-        if not req.confirm:
+        if not (req.confirm or full_access()):
             raise HTTPException(400, (
                 "payload feeds collision detection; a wrong value degrades a "
                 "safety-relevant function. Resend with confirm=true"))

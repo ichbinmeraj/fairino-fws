@@ -18,6 +18,7 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from .access import full_access
 from .driver import RobotError
 from .files import TransferError, delete_lua, download_lua, upload_lua
 from .pathcheck import validate as validate_path
@@ -259,7 +260,7 @@ def build(get_driver, get_settings, get_caps, get_control, audit) -> APIRouter:
             return out
 
         _lock("motion", x_fws_control_token)
-        if not req.confirm:
+        if not (req.confirm or full_access()):
             raise HTTPException(400, (
                 f"{name} is now selected but NOT started: running a program "
                 f"commands motion this gateway does not bound. Clear the "
@@ -337,7 +338,7 @@ def build(get_driver, get_settings, get_caps, get_control, audit) -> APIRouter:
         """
         _lock("motion", x_fws_control_token)
         d = get_driver()
-        if not req.confirm:
+        if not (req.confirm or full_access()):
             raise HTTPException(400, (
                 "running a program commands motion the gateway does not "
                 "bound -- FWS's jog limits and kinematics pre-flight do not "

@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 from . import capabilities as caps_mod
 from . import config as config_mod
+from .access import full_access, set_full_access
 from .auth import KeyStore, is_open_path
 from .backup_api import build as build_backup_api
 from .capabilities import Capabilities
@@ -131,6 +132,8 @@ def create_app(new_settings: config_mod.Settings | None = None) -> FastAPI:
     global settings, driver, telemetry, keys, capabilities, LIMIT_MARGIN
     if new_settings is not None:
         settings = new_settings
+        # Latch the developer switch before anything can consult it.
+        set_full_access(settings.features.full_access)
         driver = RobotDriver(settings.robot.ip,
                              timeout=settings.robot.rpc_timeout_s,
                              port=settings.robot.rpc_port,
@@ -179,8 +182,13 @@ class JogRequest(BaseModel):
     # Bounded because the handler is truthy: without ge/le, a client sending
     # the plausible-looking -1 would be silently accepted and jog POSITIVE.
     direction: int = Field(ge=0, le=1, description="1 = positive, 0 = negative")
-    step: float = Field(default=5.0, gt=0, le=15.0, description="degrees, bounded")
-    vel: float = Field(default=10.0, gt=0, le=30.0, description="percent")
+    # The step/vel ceilings are enforced in the handler, not here, so that
+    # features.full_access can lift them. The model keeps only the bound that
+    # is about meaning rather than magnitude: direction, above.
+    step: float = Field(default=5.0, gt=0,
+                        description="degrees; bounded by limits.jog_max_deg")
+    vel: float = Field(default=10.0, gt=0,
+                       description="percent; bounded by limits.jog_max_vel_pct")
 
 
 class EnableRequest(BaseModel):
@@ -333,6 +341,8 @@ class AcquireRequest(BaseModel):
 
 def _require(domain: str, token: str | None) -> None:
     """Gate a write on the control lock: 428 if no token, 423 if held by another."""
+    if full_access():
+        return                      # the lock is one of the guards taken off
     lease = control.held_by(domain)
     if lease is None:
         return                      # unheld: single-client operation still works
@@ -393,7 +403,7 @@ def control_break(domain: str):
 def robot_enable(req: EnableRequest,
          x_fws_control_token: str | None = Header(default=None)):
     _require("motion", x_fws_control_token)
-    if req.enable and not req.confirm:
+    if req.enable and not (req.confirm or full_access()):
         raise HTTPException(400, "enabling requires confirm=true")
     try:
         driver.set_mode(manual=True)
@@ -444,7 +454,7 @@ def jog(req: JogRequest,
     # return error 14 while the controller is faulted.
     lim = _limits()
     joints = telemetry.snapshot().get("joints")
-    if lim and joints:
+    if lim and joints and not full_access():
         lo, hi = lim[req.joint - 1]
         cur = joints[req.joint - 1]
         predicted = cur + (req.step if req.direction else -req.step)
@@ -454,12 +464,13 @@ def jog(req: JogRequest,
                 f"outside the safe band [{lo + LIMIT_MARGIN:.1f}, "
                 f"{hi - LIMIT_MARGIN:.1f}]. Currently at {cur:.3f}deg. "
                 f"Jog the other way."))
-    if req.step > settings.limits.jog_max_deg:
-        raise HTTPException(422, f"step exceeds configured limit "
-                                 f"{settings.limits.jog_max_deg} deg")
-    if req.vel > settings.limits.jog_max_vel_pct:
-        raise HTTPException(422, f"vel exceeds configured limit "
-                                 f"{settings.limits.jog_max_vel_pct}%")
+    if not full_access():
+        if req.step > settings.limits.jog_max_deg:
+            raise HTTPException(422, f"step exceeds configured limit "
+                                     f"{settings.limits.jog_max_deg} deg")
+        if req.vel > settings.limits.jog_max_vel_pct:
+            raise HTTPException(422, f"vel exceeds configured limit "
+                                     f"{settings.limits.jog_max_vel_pct}%")
     try:
         driver.jog(req.joint, bool(req.direction), req.step, req.vel)
     except RobotError as e:
@@ -471,9 +482,11 @@ class LinearJogRequest(BaseModel):
     axis: int = Field(ge=1, le=6, description="1-3 = X/Y/Z, 4-6 = RX/RY/RZ")
     # Same bound and reason as JogRequest.direction.
     direction: int = Field(ge=0, le=1, description="1 = positive, 0 = negative")
-    step: float = Field(default=10.0, gt=0, le=50.0,
+    # Ceilings enforced in the handler so full_access can lift them; see
+    # JogRequest.
+    step: float = Field(default=10.0, gt=0,
                         description="mm for axes 1-3, degrees for 4-6")
-    vel: float = Field(default=10.0, gt=0, le=30.0)
+    vel: float = Field(default=10.0, gt=0)
     frame: str = Field(default="base", description="base or tool")
 
 
@@ -488,8 +501,13 @@ def jog_linear(req: LinearJogRequest,
     _require("motion", x_fws_control_token)
     cap = (settings.limits.jog_max_mm if req.axis <= 3
            else settings.limits.rotation_max_deg)
-    if req.step > cap:
-        raise HTTPException(422, f"step must be <= {cap} for axis {req.axis}")
+    if not full_access():
+        if req.step > cap:
+            raise HTTPException(422,
+                                f"step must be <= {cap} for axis {req.axis}")
+        if req.vel > settings.limits.jog_max_vel_pct:
+            raise HTTPException(422, f"vel exceeds configured limit "
+                                     f"{settings.limits.jog_max_vel_pct}%")
 
     delta = [0.0] * 6
     delta[req.axis - 1] = req.step if req.direction else -req.step
@@ -505,7 +523,7 @@ def jog_linear(req: LinearJogRequest,
             f"singularity. Underlying: {e}")) from e
 
     lim = _limits()
-    if lim:
+    if lim and not full_access():
         for i, (lo, hi) in enumerate(lim):
             if not (lo + LIMIT_MARGIN <= target_joints[i] <= hi - LIMIT_MARGIN):
                 raise HTTPException(409, (
@@ -706,4 +724,5 @@ def index():
         "openapi": "/openapi.json",
         "websocket": "/ws/state",
         "read_only": settings.server.read_only,
+        "full_access": settings.features.full_access,
     }

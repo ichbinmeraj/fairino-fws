@@ -11,6 +11,7 @@ import base64
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from .access import full_access
 from .backup import (
     BACKUP_KINDS,
     BackupError,
@@ -138,7 +139,7 @@ def build(get_driver, get_settings, get_control, audit) -> APIRouter:
         like a motion command."""
         _lock("config", x_fws_control_token)
         name = _safe_db_name(name)
-        if not req.confirm:
+        if not (req.confirm or full_access()):
             raise HTTPException(400, (
                 "restoring a point table overwrites the positions this cell "
                 "was taught. Any program that moves between named points "

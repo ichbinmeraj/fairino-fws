@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from . import invoke as policy
+from .access import full_access
 from .driver import RobotDriver, RobotError
 from .protocol.commands import COMMANDS, VERIFIED_COMMANDS, summary
 
@@ -90,7 +91,8 @@ def build_router(get_driver, get_settings) -> APIRouter:
         except policy.Refusal as e:
             raise HTTPException(e.status, e.detail) from e
 
-        if not settings.features.enable_command_passthrough:
+        if not (settings.features.enable_command_passthrough
+                or full_access()):
             raise HTTPException(403, (
                 "command passthrough is disabled "
                 "(features.enable_command_passthrough = false)"))
@@ -104,6 +106,8 @@ def build_router(get_driver, get_settings) -> APIRouter:
                 f"proceed anyway."))
 
         domain, needs_confirm = policy.requirements(c)
+        if full_access():
+            domain, needs_confirm = None, False
         if domain is not None:
             raise HTTPException(428, (
                 f"{name} is classified '{c.danger}' and requires the "
