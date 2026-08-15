@@ -5,6 +5,7 @@ tokens are truncated. Bounded in memory with an optional file sink.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import pathlib
 import threading
@@ -26,6 +27,10 @@ class AuditLog:
         # durable trail stopped being written.
         self.sink_errors = 0
         self.sink_last_error: str | None = None
+        # Set by the app to the event bus's publish, so every audited command
+        # is also pushed. A plain attribute rather than a constructor
+        # argument: the log is built before the bus and must work without it.
+        self.on_record = None
 
     def record(self, action: str, *, actor: str = "anonymous",
                **detail: Any) -> dict:
@@ -48,6 +53,11 @@ class AuditLog:
                 # is still in memory, and the failure is counted.
                 self.sink_errors += 1
                 self.sink_last_error = str(e)[:200]
+        if self.on_record is not None:
+            # A notification must never break the command it describes.
+            with contextlib.suppress(Exception):
+                self.on_record(f"audit.{action}", **{
+                    k: v for k, v in event.items() if k not in ("ts", "seq")})
         return event
 
     def health(self) -> dict[str, Any]:
