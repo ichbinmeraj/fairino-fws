@@ -114,6 +114,28 @@ All routes are under `/api/v1`. The full, live specification is served at
 Stop and health are never authenticated: a client whose key is wrong or missing
 must still be able to stop the arm and probe health.
 
+## Driving it from Python
+
+`pip install fairino-fws` ships a client, so you do not have to reimplement
+the control-lease handshake yourself:
+
+```python
+from fws.client import FwsClient
+
+with FwsClient("http://localhost:8000") as fws:
+    print(fws.state()["joints"])
+    with fws.control("motion"):        # acquires, heartbeats, releases
+        fws.enable()
+        fws.jog(joint=1, direction=1, step=5)
+        fws.wait_until_idle()
+```
+
+It is dependency-free (urllib), its refusals are typed (`NeedsLease`,
+`HeldByAnother`, `NeedsConfirm`), and the lease heartbeat is handled for you —
+if it ever fails, the next command raises rather than letting you drive a
+robot the watchdog is about to stop. From any other language, the OpenAPI
+spec at `/openapi.json` generates an equivalent.
+
 ## Testing your code against FWS
 
 Your cell logic can run against a fake robot in CI. `fws.testing.gateway()`
