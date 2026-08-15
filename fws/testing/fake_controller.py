@@ -33,6 +33,7 @@ import threading
 import time
 import xmlrpc.client
 import xmlrpc.server
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from . import kinematics
@@ -70,6 +71,10 @@ MM_PER_SEC_PER_PCT = 10.0
 #   PrintMsg  absent (documented in the manual, not on this firmware)
 LUA_BUILTINS: dict[str, tuple[int, int]] = {
     "WaitMs": (1, 1),
+    # PROBED on v3.8.5.1 at arity 29 (protocol/lua_firmware.py). It was
+    # missing here, so the fake answered "attempt to call global MoveJ (a
+    # nil value)" for a function the firmware really has.
+    "MoveJ": (29, 29),
     "MoveL": (32, 33),
     "PTP": (1, 20),
     "SetDO": (2, 4),
@@ -212,6 +217,7 @@ class FakeController:
 
         self.calls: list[tuple[str, tuple]] = []      # for assertions in tests
         self.shut_down = False                       # ShutDownRobotOS reached
+        self._corrupt_frames = 0                     # corrupt_next_frame()
         self._frame_counter = 0
         self._stream_client_connected = False
         self._pending_upload: str | None = None
@@ -322,6 +328,51 @@ class FakeController:
             self.state.error_main = main
             self.state.error_sub = sub
             self.state.moving = False
+
+    # ------------------------------------------------------- scenario API
+    # The STABLE surface for tests outside this package. Everything else on
+    # this class is an implementation detail that may change with the
+    # protocol work; these five names will not, because a customer's CI
+    # suite is allowed to depend on them. See fws/testing/harness.py.
+
+    def trip_fault(self, main: int = 1, sub: int = 22) -> None:
+        """Put the controller into a fault, the way the arm does.
+
+        While faulted, many getters answer `error 14` as a RETURN VALUE
+        rather than raising -- the behaviour that makes 'absent' and
+        'suppressed by a fault' indistinguishable, so it is worth testing.
+        """
+        self.latch_fault(main, sub)
+
+    def clear_fault(self) -> None:
+        """Clear the latched fault. The getters start answering again."""
+        self.latch_fault(0, 0)
+
+    def set_joints(self, joints: Sequence[float]) -> None:
+        """Place the arm. Six degrees; the TCP follows through forward
+        kinematics, so telemetry and the position getters stay consistent."""
+        vals = [float(j) for j in joints]
+        if len(vals) != 6:
+            raise ValueError(f"six joint angles required, got {len(vals)}")
+        with self._lock:
+            self.state.joints = vals
+
+    def set_force(self, ft: Sequence[float]) -> None:
+        """Set the wrist force/torque reading: [fx, fy, fz, tx, ty, tz]."""
+        vals = [float(v) for v in ft]
+        if len(vals) != 6:
+            raise ValueError(f"six force/torque values required, got {len(vals)}")
+        with self._lock:
+            self.state.ft = vals
+
+    def corrupt_next_frame(self, count: int = 1) -> None:
+        """Send `count` telemetry frames with a deliberately wrong checksum.
+
+        A client must DROP these, not read them: a corrupt frame carries
+        plausible-looking joint angles. FWS counts them in `bad_checksum`.
+        """
+        with self._lock:
+            self._corrupt_frames = max(0, int(count))
 
     # ------------------------------------------------------------ RPC surface
     def _register(self) -> None:
@@ -919,6 +970,12 @@ class FakeController:
                            for t in self.state.joint_torque])
         struct.pack_into("<6d", buf, FT_OFF, *self.state.ft)
         checksum = sum(buf[:5 + DATA_LEN]) & 0xFFFF
+        if self._corrupt_frames > 0:
+            # Deliberately wrong, for corrupt_next_frame(). The DATA is left
+            # plausible on purpose: a client that ignores the checksum reads
+            # a believable pose, which is the failure worth testing.
+            checksum = (checksum + 1) & 0xFFFF
+            self._corrupt_frames -= 1
         struct.pack_into("<H", buf, 5 + DATA_LEN, checksum)
         self._frame_counter += 1
         return bytes(buf)

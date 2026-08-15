@@ -4,7 +4,46 @@ All notable changes to FWS are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0a3] — unreleased
+## [0.1.0a4] — unreleased
+
+### Added
+
+- **A supported test harness.** `fws.testing.gateway()` starts the fake
+  controller, the driver, telemetry and the app on ephemeral ports and hands
+  back a client, so you can test your cell logic against FWS in CI without
+  hardware:
+
+  ```python
+  from fws.testing import gateway
+
+  with gateway() as g:
+      assert g.get("/api/v1/state").status_code == 200
+      g.controller.trip_fault()
+  ```
+
+  The fake was always the strongest thing FWS shipped, but using it took
+  private knowledge that lived only in this repo's test wiring. A pytest
+  plugin (`pytest_plugins = ["fws.testing.pytest_plugin"]`, then the
+  `fws_gateway` fixture) comes with it, and `FakeController` gains a
+  **frozen** scenario API: `trip_fault`, `clear_fault`, `set_joints`,
+  `set_force`, `corrupt_next_frame`. Everything else on that class stays an
+  implementation detail.
+
+- **`examples/`** — four runnable programs covering reading state, jogging
+  under a control lease, the whole generate → upload → validate → load → run
+  loop, and fault handling. Each starts its own simulated gateway, or takes
+  `--url` to run against a real one. CI runs all four, so they cannot drift
+  from the API.
+
+### Fixed
+
+- `MoveJ` was missing from the simulator's Lua builtin table although
+  `lua_firmware` records it probed present at arity 29, so the fake rejected
+  correct programs with "attempt to call global MoveJ".
+- The harness gives each gateway a temporary `data_dir`, so running one no
+  longer writes an upload index into the caller's working directory.
+
+## [0.1.0a3] — 2026-08-15
 
 ### Fixed
 
