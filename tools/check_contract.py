@@ -37,24 +37,29 @@ def _write() -> int:
 
 
 def _check() -> int:
-    live = contract.dumps(_live_spec())
+    """Fail if the app's SURFACE has drifted from the committed spec.
+
+    Compared semantically, not byte-for-byte: FastAPI/pydantic emit
+    cosmetically different JSON on different dependency sets, so a byte match
+    would fail on one CI runner and pass on another for reasons that are not
+    contract changes. The surface -- the operations and their required inputs
+    -- is what a client depends on, and that must match everywhere.
+    """
+    import json
     if not SPEC_PATH.exists():
         print("openapi.json is missing. Run: "
               "python tools/check_contract.py --write", file=sys.stderr)
         return 1
-    committed = SPEC_PATH.read_text()
-    if live == committed:
-        print("openapi.json is up to date")
+    committed = json.loads(SPEC_PATH.read_text())
+    changes = contract.classify_changes(committed, _live_spec())
+    if not changes["breaking"] and not changes["additive"]:
+        print("openapi.json surface is up to date")
         return 0
     print("openapi.json is STALE -- the app's surface has changed.\n"
           "If that was intentional, run:\n"
           "    python tools/check_contract.py --write\n"
           "and commit the result. If not, you changed the API by accident.",
           file=sys.stderr)
-    # Show what moved, so the failure is legible in a CI log.
-    import json
-    changes = contract.classify_changes(json.loads(committed),
-                                        json.loads(live))
     for kind in ("breaking", "additive"):
         for line in changes[kind]:
             print(f"  [{kind}] {line}", file=sys.stderr)

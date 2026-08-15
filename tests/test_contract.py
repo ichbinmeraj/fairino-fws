@@ -25,16 +25,30 @@ class TestTheCommittedSpecIsHonest:
         assert SPEC.exists(), (
             "openapi.json is missing; run tools/check_contract.py --write")
 
-    def test_it_matches_the_live_app(self):
-        """The gate. If this fails, the surface changed without the committed
-        contract being regenerated -- either a deliberate change that needs
-        `--write` and a changelog line, or an accident."""
-        live = contract.dumps(contract.snapshot(app_mod.app))
-        committed = SPEC.read_text()
-        assert live == committed, (
-            "the API surface has drifted from openapi.json. If intended, run "
-            "`python tools/check_contract.py --write` and commit; if not, you "
-            "changed the API by accident.")
+    def test_its_surface_matches_the_live_app(self):
+        """The gate, robust across the CI version matrix.
+
+        Compared SEMANTICALLY, not byte-for-byte: FastAPI/pydantic emit
+        cosmetically different JSON on different dependency sets (this test
+        was byte-exact once and passed on 3.12/3.13 while failing on 3.11 for
+        exactly that reason). What a client actually depends on -- the set of
+        operations and their required inputs -- must match; wording and
+        formatting may differ between environments without being a contract
+        change.
+
+        `tools/check_contract.py` (run in the guards job) checks the same
+        surface equivalence; `--write` regenerates the committed bytes when a
+        change is intentional. Here we check the thing that must hold on every
+        Python in the matrix.
+        """
+        committed = json.loads(SPEC.read_text())
+        live = contract.snapshot(app_mod.app)
+        changes = contract.classify_changes(committed, live)
+        assert changes == {"breaking": [], "additive": []}, (
+            "the API surface has drifted from openapi.json:\n"
+            f"  {changes}\n"
+            "If intended, run `python tools/check_contract.py --write` and "
+            "commit; if not, you changed the API by accident.")
 
     def test_the_snapshot_omits_the_volatile_version(self):
         """info.version tracks the package version; leaving it in would make

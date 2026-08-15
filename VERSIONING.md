@@ -8,9 +8,13 @@ promise you can plan around.
 
 The REST surface at `/api/v1`, as described by the OpenAPI spec served at
 `/openapi.json`. A canonical copy is committed to this repository as
-[`openapi.json`](openapi.json), and CI fails if the running app drifts from
-it. So the surface cannot change without a commit that a reviewer sees — there
-are no silent changes, even before 1.0.
+[`openapi.json`](openapi.json), and CI fails if the running app's **surface**
+drifts from it — the set of operations and their required inputs, which is
+what a client actually depends on. (The comparison is semantic, not
+byte-exact: FastAPI emits cosmetically different JSON on different dependency
+sets, so a byte match would fail for reasons that are not contract changes.)
+So the surface cannot change without a commit that a reviewer sees — there are
+no silent surface changes, even before 1.0.
 
 The WebSocket streams (`/ws/state`, `/ws/events`) are **not** in the OpenAPI
 spec — FastAPI does not describe WebSockets — so they are documented separately
