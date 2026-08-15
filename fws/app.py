@@ -37,6 +37,8 @@ from .files_api import build as build_files_api
 from .force_api import build as build_force_api
 from .invoke_api import build as build_invoke_api
 from .lua_api import router as lua_router
+from .poses import PoseStore
+from .poses_api import build as build_poses_api
 from .programs_api import build as build_programs_api
 from .runners import AbortRegistry
 from .services_api import build as build_services_api
@@ -107,6 +109,7 @@ keys = KeyStore(settings.auth.api_keys_file)
 capabilities = Capabilities(driver)
 audit = AuditLog()
 abortables = AbortRegistry()
+poses = PoseStore(settings.server.data_dir / "poses.json")
 
 
 def _on_lease_lapse(reason: str, lease) -> None:
@@ -129,7 +132,7 @@ def create_app(new_settings: config_mod.Settings | None = None) -> FastAPI:
 
     Route handlers read these globals at call time, so rebinding is sufficient.
     """
-    global settings, driver, telemetry, keys, capabilities, LIMIT_MARGIN
+    global settings, driver, telemetry, keys, capabilities, LIMIT_MARGIN, poses
     if new_settings is not None:
         settings = new_settings
         # Latch the developer switch before anything can consult it.
@@ -147,6 +150,7 @@ def create_app(new_settings: config_mod.Settings | None = None) -> FastAPI:
         # The durable sink was supported by AuditLog and wired by nobody, so
         # every trail died with the process.
         audit.path = settings.audit_file()
+        poses = PoseStore(settings.server.data_dir / "poses.json")
     return app
 
 
@@ -738,6 +742,11 @@ app.include_router(build_system_api(
 ))
 app.include_router(build_backup_api(
     lambda: driver, lambda: settings, lambda: control, _audit,
+))
+# Named poses, stored by the gateway. Not the controller's point tables --
+# this firmware cannot write one named point into a table.
+app.include_router(build_poses_api(
+    lambda: driver, lambda: telemetry, lambda: poses, lambda: control, _audit,
 ))
 # Controller QNX base services (FTP/telnet/qconn/8060). Each route is dark
 # unless its feature flag is on; privileged ones require auth (enforced at
