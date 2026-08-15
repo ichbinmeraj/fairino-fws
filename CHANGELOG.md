@@ -4,7 +4,31 @@ All notable changes to FWS are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0a11] — unreleased
+## [0.1.0a12] — unreleased
+
+### Added
+
+- **The typed gripper route** — `POST /api/v1/gripper/activate` and
+  `POST /api/v1/gripper/command`. Open-and-close is a top-five request for
+  any cobot gateway, and reaching it meant `POST /invoke/MoveGripper` with a
+  ten-argument list in wire order and no bounds on any of them — one of
+  which is how hard it squeezes.
+
+  Every argument is bounded, rotation is sent as zeros (sending one to a
+  gripper that does not rotate is not an accident to have), and the call is
+  non-blocking so stop still works while it grips. Motion lease plus
+  confirm; the refusal names the consequence rather than the rule.
+
+  Gated on a **capability probe**, not a feature flag: this controller
+  answers gripper getters with zeros when none is fitted, so a command would
+  be accepted and silently do nothing. A missing gripper is now a clear 409,
+  with `?force_probe=false` for a cell where the probe is wrong.
+
+  `MoveGripper` is *documented*, not *measured*, on this firmware. The
+  response says so in a `verified: false` field, and a test fails if someone
+  measures it and forgets to update the note.
+
+## [0.1.0a11] — 2026-08-15
 
 ### Added
 

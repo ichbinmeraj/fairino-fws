@@ -23,6 +23,10 @@ UNKNOWN = "unknown"
 
 # (feature, method, args). Every entry is a getter with no side effects.
 PROBES: tuple[tuple[str, str, tuple], ...] = (
+    # A gripper that is not fitted answers the getters with zeros rather
+    # than an error, so a gripper command would silently do nothing. The
+    # METHOD being absent is still worth knowing. UNMEASURED on hardware.
+    ("gripper.position",        "GetGripperCurPosition", ()),
     ("identity.version",        "GetSoftwareVersion", ()),
     ("identity.controller_ip",  "GetControllerIP", ()),
     ("identity.install_angle",  "GetRobotInstallAngle", ()),
