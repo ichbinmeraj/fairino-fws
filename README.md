@@ -100,6 +100,7 @@ All routes are under `/api/v1`. The full, live specification is served at
 |---|---|
 | `/state`, `/motion`, `/ws/state` | live state, jog, stop, preview, the WebSocket stream |
 | `/robot`, `/io`, `/frames` | control layer: pose, I/O, tool/work frames, payload |
+| `/model` | the measured kinematic model, served as URDF |
 | `/poses` | named poses: capture, edit, generate a program from them |
 | `/programs`, `/execution` | program CRUD, load, run/pause/resume/stop |
 | `/files` | controller file manager |
