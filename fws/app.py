@@ -37,6 +37,7 @@ from .eventbus import EdgeDetector, EventBus
 from .events import AuditLog
 from .files_api import build as build_files_api
 from .force_api import build as build_force_api
+from .gripper_api import build as build_gripper_api
 from .invoke_api import build as build_invoke_api
 from .lua_api import router as lua_router
 from .metrics import render as render_metrics
@@ -883,6 +884,12 @@ app.include_router(build_backup_api(
 # The measured kinematic model, as URDF. No URDF matched to this firmware
 # is published anywhere, and the vendor's is measurably worse.
 app.include_router(build_model_api(lambda: driver))
+# The gripper: bounded arguments over a documented-but-unmeasured wire
+# call, gated on the capability probe so a command to a gripper that is
+# not fitted refuses instead of silently doing nothing.
+app.include_router(build_gripper_api(
+    lambda: driver, lambda: capabilities, lambda: control, _audit,
+))
 # Absolute moves. Off unless features.enable_movel is set: the wire
 # layout once produced an unintended ~300 mm motion on this firmware.
 app.include_router(build_move_api(

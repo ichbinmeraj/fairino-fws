@@ -218,6 +218,7 @@ class FakeController:
         self.calls: list[tuple[str, tuple]] = []      # for assertions in tests
         self.shut_down = False                       # ShutDownRobotOS reached
         self._corrupt_frames = 0                     # corrupt_next_frame()
+        self.gripper_position = 0                    # MoveGripper
         self._frame_counter = 0
         self._stream_client_connected = False
         self._pending_upload: str | None = None
@@ -798,6 +799,18 @@ class FakeController:
             self.state.payload_kg = float(weight)
             return 0
 
+        def MoveGripper(index, pos, vel, force, maxtime, block,
+                        gtype, rot_num, rot_vel, rot_torque):
+            """Ten arguments, documented order. NEVER exercised on the real
+            v3.8.5.1 -- the registry marks it `documented`, not `measured`.
+            Modelled here so the typed route is testable and the arity is
+            pinned; a client that gets the count wrong fails here rather than
+            against an arm holding a part."""
+            self._record("MoveGripper", index, pos, vel, force, maxtime,
+                         block, gtype, rot_num, rot_vel, rot_torque)
+            self.gripper_position = int(pos)
+            return 0
+
         def ActGripper(index, action):
             """Motion-class command not owned by a typed FWS route; a motion
             exemplar the generic invoker will dispatch (StartJOG is
@@ -860,7 +873,7 @@ class FakeController:
         def GetRobotInstallAngle():
             return ok(0.0, 0.0)
 
-        for fn in (ShutDownRobotOS,
+        for fn in (ShutDownRobotOS, MoveGripper,
                    GetSoftwareVersion, GetSDKVersion, GetControllerIP,
                    GetRobotErrorCode, GetRobotMotionDone,
                    GetActualJointPosDegree, GetActualTCPPose,
