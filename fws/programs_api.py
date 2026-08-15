@@ -296,7 +296,10 @@ def build(get_driver, get_settings, get_caps, get_control, audit) -> APIRouter:
         return validate_path(
             src, inverse_kin=ik, joint_limits=d.joint_limits,
             current_pose=current,
-            limit_margin_deg=get_settings().limits.limit_margin_deg)
+            limit_margin_deg=get_settings().limits.limit_margin_deg,
+            # pathcheck has always supported the floor; nothing passed it, so
+            # a configured z_floor_mm silently protected nothing.
+            z_floor=get_settings().limits.z_floor_mm)
 
     @router.post("/programs/{name}/validate")
     def validate_program(name: str):

@@ -22,6 +22,10 @@ class AuditLog:
         self._events: deque[dict] = deque(maxlen=maxlen)
         self._lock = threading.Lock()
         self._seq = 0
+        # Sink failures are counted, not raised, so health can say the
+        # durable trail stopped being written.
+        self.sink_errors = 0
+        self.sink_last_error: str | None = None
 
     def record(self, action: str, *, actor: str = "anonymous",
                **detail: Any) -> dict:
@@ -39,11 +43,25 @@ class AuditLog:
             try:
                 with self.path.open("a") as fh:
                     fh.write(json.dumps(event) + "\n")
-            except OSError:
+            except OSError as e:
                 # A failing sink must never break a robot command; the event
-                # is still in memory.
-                pass
+                # is still in memory, and the failure is counted.
+                self.sink_errors += 1
+                self.sink_last_error = str(e)[:200]
         return event
+
+    def health(self) -> dict[str, Any]:
+        """What the durable trail is doing, for GET /system/health."""
+        return {
+            "in_memory": len(self._events),
+            "capacity": self._events.maxlen,
+            "file": str(self.path) if self.path else None,
+            # False means a restart loses the trail. Stated rather than
+            # implied: "file": null is easy to read past.
+            "durable": self.path is not None and self.sink_errors == 0,
+            "sink_errors": self.sink_errors,
+            "sink_last_error": self.sink_last_error,
+        }
 
     def recent(self, limit: int = 100, action: str | None = None) -> list[dict]:
         with self._lock:
