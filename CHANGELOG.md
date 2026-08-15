@@ -4,7 +4,43 @@ All notable changes to FWS are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0a4] — unreleased
+## [0.1.0a5] — unreleased
+
+### Added
+
+- **Named poses, stored by the gateway.** A taught point is production data,
+  and until now it lived in one browser's localStorage: it died with a
+  profile, could not be reviewed or backed up, and no API client or CI job
+  could see it. The controller cannot help — this firmware has no way to
+  write a single named point into a point table — so the gateway keeps them.
+
+  ```
+  POST   /api/v1/poses/{name}/capture   record where the arm is now
+  GET    /api/v1/poses                  list
+  GET    /api/v1/poses/{name}           read
+  PUT    /api/v1/poses/{name}           write explicitly
+  POST   /api/v1/poses/{name}/rename    rename
+  DELETE /api/v1/poses/{name}           forget
+  POST   /api/v1/poses/program          generate Lua through named poses
+  ```
+
+  Kept as JSON in `data_dir` and written atomically, so a crash cannot leave
+  a truncated file where the taught points were. A corrupt store starts empty
+  and *keeps* the bad file rather than looking like someone deleted the
+  points.
+
+  Capture takes one telemetry snapshot, so a pose's joint and Cartesian
+  halves cannot describe different positions, and it **refuses a stale
+  frame** — the snapshot keeps its last values after the stream drops, so
+  capturing without an age check would record where the arm *was*.
+
+  Generated programs use literal joint targets, never point-table names, so
+  `POST /programs/{name}/validate` can still solve every target backwards
+  before anything moves. Generating never uploads or runs: generating is
+  safe, running moves the arm, so they stay separate calls with separate
+  gates.
+
+## [0.1.0a4] — 2026-08-15
 
 ### Added
 
