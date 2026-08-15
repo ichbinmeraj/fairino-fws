@@ -32,7 +32,16 @@ jobs:
           cache: pip
       - run: pip install -e ".[dev]"
       - name: Run tests
-        run: pytest -q --tb=short
+        # On failure, surface the failing test ids as GitHub annotations
+        # (::error::) as well as the full log. Actions logs need auth to read
+        # externally; annotations do not, so a red run is diagnosable from the
+        # API. -p no:cacheprovider keeps runs independent.
+        run: |
+          set -o pipefail
+          pytest -q --tb=short -rf -p no:cacheprovider 2>&1 | tee pytest.out || {
+            grep -E "^FAILED|^ERROR" pytest.out | sed 's/^/::error::/'
+            exit 1
+          }
         env:
           CI: "true"   # hardware-motion tests refuse to run when this is set
 
