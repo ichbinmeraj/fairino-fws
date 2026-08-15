@@ -4,7 +4,7 @@ All notable changes to FWS are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0a6] — unreleased
+## [0.1.0a7] — unreleased
 
 ### Added
 
@@ -24,6 +24,8 @@ All notable changes to FWS are documented here. The format follows
   ship with `fairino-fws-console`. The chain is hardware-verified, but this
   *document* has not been checked in a URDF consumer against the live arm,
   and `/api/v1/model` says so.
+
+## [0.1.0a6] — 2026-08-15
 
 ### Fixed
 
