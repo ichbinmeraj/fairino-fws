@@ -11,8 +11,8 @@ startup safety refusals become warnings.
 It defaults OFF, so the package ships safe to anyone who does not opt in and
 the test suite keeps exercising the guarded behaviour.
 
-WHAT IT DOES NOT TOUCH. The physical emergency stop (ISO 13850) is the only
-thing that actually stops the arm, and no software switch changes that: FWS is
+WHAT IT DOES NOT TOUCH. The physical E-stop (ISO 13850) is the only thing
+that actually stops the arm, and no software switch changes that: FWS is
 not a safety device (SAFETY.md). Full access removes the rails that stop a
 mistake from reaching the controller -- a wrong command can then power off or
 brick it with no remote recovery, and a runaway move is stopped only by the
