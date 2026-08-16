@@ -1,0 +1,74 @@
+site_name: FWS — Fairino Web Services
+site_description: >-
+  A REST + WebSocket gateway for Fairino collaborative robots. Drive the arm
+  from any language, with no vendor SDK.
+site_url: https://ichbinmeraj.github.io/fairino-fws/
+repo_url: https://github.com/ichbinmeraj/fairino-fws
+repo_name: ichbinmeraj/fairino-fws
+copyright: Copyright &copy; 2026 Meraj Safari — Apache-2.0
+
+# The docs are built and hosted on GitHub Pages; they are not shipped in the
+# wheel and add no runtime dependency. Install the toolchain with
+# `pip install -r requirements-docs.txt`, preview with `mkdocs serve`.
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+    - toc.follow
+
+plugins:
+  - search
+  # Single source of truth: the canonical policy files live at the repo root
+  # (SAFETY.md, VERSIONING.md, WEBSOCKETS.md) and are pulled into the site,
+  # rather than duplicated under docs/.
+  - include-markdown
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Guides:
+      - Moving the arm: motion.md
+      - The Python client: python-client.md
+      - Testing your code: testing.md
+      - Events, recordings & metrics: events-and-observability.md
+  - Concepts:
+      - Control lease & safety: control-and-safety.md
+      - Safety (policy): safety.md
+  - Reference:
+      - Reference & deployment: reference-and-deployment.md
+      - Versioning & contract: versioning.md
+      - WebSocket streams: websockets.md

@@ -1,0 +1,7 @@
+# Documentation site toolchain — build-time only, NOT a runtime dependency of
+# the gateway (the wheel still installs just the four runtime deps).
+#   pip install -r requirements-docs.txt
+#   mkdocs serve      # preview at http://127.0.0.1:8000
+#   mkdocs build      # static site into ./site
+mkdocs-material>=9.5
+mkdocs-include-markdown-plugin>=6.0
