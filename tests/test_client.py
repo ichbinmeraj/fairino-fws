@@ -127,6 +127,29 @@ class TestTheLease:
                 "the heartbeat did not keep the lease")
             fws.enable(False)              # still commanding successfully
 
+    def test_the_heartbeat_renews_to_the_acquired_ttl(self):
+        """The heartbeat route defaults to 30 s. If the client did not echo
+        the acquired ttl, control(ttl_s>90) would renew to 30 s and lapse
+        between beats (period ttl_s/3 > 30) -- stopping the arm. Capture the
+        heartbeat request and assert it carries the ttl.
+
+        Uses ttl_s=6 (period 2 s) so a beat is observable within the test;
+        the value proven is the same for any ttl."""
+        with gateway() as g, FwsClient(g.url) as fws:
+            seen = []
+            real = fws.post
+
+            def spy(path, *a, **k):
+                if "heartbeat" in path:
+                    seen.append(path)
+                return real(path, *a, **k)
+
+            fws.post = spy
+            with fws.control("motion", ttl_s=6.0):
+                time.sleep(2.5)          # period 2 s -> at least one beat
+            assert seen, "no heartbeat was sent"
+            assert all("ttl_s=6" in p for p in seen), seen
+
     def test_a_lost_lease_raises_instead_of_going_quiet(self):
         """The worst possible failure is silence: the arm is about to be
         stopped by the watchdog and the client thinks it is still in charge."""
