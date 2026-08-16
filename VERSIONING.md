@@ -8,7 +8,7 @@ promise you can plan around.
 
 The REST surface at `/api/v1`, as described by the OpenAPI spec served at
 `/openapi.json`. A canonical copy is committed to this repository as
-[`openapi.json`](openapi.json), and CI fails if the running app's **surface**
+[`openapi.json`](https://github.com/ichbinmeraj/fairino-fws/blob/master/openapi.json), and CI fails if the running app's **surface**
 drifts from it — the set of operations and their required inputs, which is
 what a client actually depends on. (The comparison is semantic, not
 byte-exact: FastAPI emits cosmetically different JSON on different dependency
@@ -18,7 +18,7 @@ no silent surface changes, even before 1.0.
 
 The WebSocket streams (`/ws/state`, `/ws/events`) are **not** in the OpenAPI
 spec — FastAPI does not describe WebSockets — so they are documented separately
-in [`WEBSOCKETS.md`](WEBSOCKETS.md) and their shape is pinned by tests.
+in [`WEBSOCKETS.md`](https://github.com/ichbinmeraj/fairino-fws/blob/master/WEBSOCKETS.md) and their shape is pinned by tests.
 
 ## The pre-1.0 promise
 
@@ -30,7 +30,7 @@ While the version is `0.x`:
 - **Breaking changes are allowed, but never silent.** Removing a route,
   removing an operation, adding a required parameter or body field, changing a
   type — any of these will be:
-  1. called out in [`CHANGELOG.md`](CHANGELOG.md) under the release, and
+  1. called out in [`CHANGELOG.md`](https://github.com/ichbinmeraj/fairino-fws/blob/master/CHANGELOG.md) under the release, and
   2. flagged by CI, which runs `tools/check_contract.py --since <last tag>`
      and classifies every change as additive or breaking.
 

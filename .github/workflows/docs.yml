@@ -1,0 +1,62 @@
+name: Docs
+
+# Build the documentation site on every push to master, and publish it to
+# GitHub Pages once the repo is set up for it. Two one-time settings enable
+# publishing; until then the build still runs and the deploy job is skipped
+# (green, not failed):
+#   1. Settings -> Pages -> Source: GitHub Actions
+#   2. Settings -> Secrets and variables -> Actions -> Variables:
+#      add a repository variable PAGES_ENABLED = true
+# The build job always runs, so a broken link or missing page fails CI even
+# before Pages is turned on.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "requirements-docs.txt"
+      - "SAFETY.md"
+      - "VERSIONING.md"
+      - "WEBSOCKETS.md"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; let a newer push supersede an in-flight build.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-docs.txt
+      - name: Build the site (strict — a broken link or missing page fails)
+        run: mkdocs build --strict
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    # Skipped (not failed) until Pages is enabled and PAGES_ENABLED=true is set.
+    if: vars.PAGES_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
