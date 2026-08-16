@@ -4,7 +4,25 @@ All notable changes to FWS are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0a14] — unreleased
+## [0.1.0a15] — unreleased
+
+### Fixed
+
+- **Client heartbeat renews to the acquired TTL.** `FwsClient.control(ttl_s=…)`
+  now echoes `ttl_s` on every heartbeat. The heartbeat route defaults to 30 s,
+  so a lease acquired above ~90 s previously renewed *down* to 30 s and lapsed
+  between beats (the client beats every `ttl_s/3`) — silently stopping the arm
+  mid-hold. Covered by a new test that captures the heartbeat request.
+
+### Added
+
+- **Documentation site.** A mkdocs-material site (Quickstart, task guides,
+  concepts, reference) builds `--strict` in CI and deploys to GitHub Pages. It
+  sources the safety, versioning and WebSocket policies from the repository's
+  own Markdown via `include-markdown`, so the published docs cannot drift from
+  the files CI checks.
+
+## [0.1.0a14] — 2026-08-15
 
 ### Added
 

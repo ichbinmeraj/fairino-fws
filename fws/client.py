@@ -191,7 +191,12 @@ class FwsClient:
             period = max(1.0, ttl_s / 3.0)
             while not self._hb_stop.wait(period):
                 try:
-                    self.post("/api/v1/control/heartbeat")
+                    # Renew to the SAME ttl we acquired with. The heartbeat
+                    # route defaults to 30 s, so without this a control(ttl_s)
+                    # above ~90 s would renew to 30 s and lapse between beats
+                    # (period ttl_s/3 > 30) -- and a lapsed motion lease stops
+                    # the arm.
+                    self.post(f"/api/v1/control/heartbeat?ttl_s={ttl_s}")
                 except BaseException as e:
                     self._lease_error = e
                     return
