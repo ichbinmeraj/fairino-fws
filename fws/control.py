@@ -174,8 +174,20 @@ class ControlLock:
         with self._lock:
             for d in domains:
                 held = self._leases.get(d)
-                if held and held.expires_at > now:
+                if (held and held.expires_at > now
+                        and held.client_id != client_id):
                     raise Conflict(d, held)
+            # The same client re-acquiring while its own lease is still live
+            # (it restarted, or lost the token) replaces that lease outright:
+            # the old token stops working and the new one takes over. No
+            # other client could hold these domains, so no stop is involved.
+            # Before this, a crashed client locked itself out for a full TTL.
+            for d in domains:
+                held = self._leases.get(d)
+                if held and held.client_id == client_id:
+                    for dd in held.domains:
+                        if self._leases.get(dd) is held:
+                            del self._leases[dd]
             lease = Lease(token=secrets.token_urlsafe(32), client_id=client_id,
                           domains=tuple(domains), acquired_at=now,
                           expires_at=now + ttl_s)

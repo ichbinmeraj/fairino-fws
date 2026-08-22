@@ -190,6 +190,21 @@ def build(get_driver, get_settings, get_caps, get_control, audit) -> APIRouter:
             raise HTTPException(409, (
                 f"{name} already exists in this gateway's index; resend with "
                 f"overwrite=true"))
+        # An upload while the interpreter is running stops the running
+        # program mid-move (measured on v3.8.5.1), and one that landed in the
+        # half-stopped state after a watchdog stop wedged the controller until
+        # a reboot. Refuse while running or paused; a stopped program is fine.
+        code = None
+        try:
+            code = _ok(get_driver()._call("GetProgramState"),
+                       "GetProgramState")[0]
+        except (RobotError, HTTPException):
+            code = None
+        if code in (2, 3):
+            raise HTTPException(409, (
+                f"a program is {PROGRAM_STATE.get(code, 'active')} on the "
+                f"controller; stop it (POST /execution/stop) before uploading "
+                f"{name} -- uploading into a live program stops it mid-move"))
         try:
             info = upload_lua(get_driver(), name, body)
         except (TransferError, RobotError) as e:
