@@ -66,6 +66,11 @@ TYPED_ROUTE_OWNED: dict[str, str] = {
     "PointTableDownload": "GET /api/v1/points/tables/{name}",
     "SetToolCoord": "PUT /api/v1/frames/tool/{frame_id}",
     "SetWObjCoord": "PUT /api/v1/frames/work/{frame_id}",
+    # This firmware cannot report its mode, so GET /api/v1/robot/mode answers
+    # from the last mode the gateway set (driver.set_mode records it). The
+    # typed route is what keeps that record complete; a raw Mode here would
+    # make the reported mode silently stale.
+    "Mode": "PUT /api/v1/robot/mode",
     # ResetAllError classifies stop (ungated), but clearing a latched fault
     # lets motion happen, so it gets its own typed route which reports the
     # fault codes back afterwards. A reset does not clear the underlying

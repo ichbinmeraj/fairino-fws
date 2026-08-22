@@ -93,6 +93,10 @@ class RobotDriver:
         # for testing; on real hardware they are fixed and open on demand.
         self.upload_port = upload_port
         self.download_port = download_port
+        # The firmware offers no way to READ the auto/manual mode, so the
+        # driver remembers the last mode it successfully commanded. None
+        # means "never set by this process", not automatic.
+        self.last_set_mode: str | None = None
         self._lock = threading.Lock()
         self._rpc = xmlrpc.client.ServerProxy(
             f"http://{ip}:{port}", transport=_Transport(timeout),
@@ -166,6 +170,7 @@ class RobotDriver:
     def set_mode(self, manual: bool) -> None:
         """0 = automatic, 1 = manual."""
         self._ok(self._call("Mode", 1 if manual else 0), "Mode")
+        self.last_set_mode = "manual" if manual else "auto"
 
     def enable(self, on: bool) -> None:
         """Releases/engages the brakes. Not an emergency stop in either
