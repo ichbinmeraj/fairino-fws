@@ -246,3 +246,112 @@ class TestTheWatchdogCannotDieSilently:
     def test_the_meaning_is_published_not_left_to_the_reader(self):
         w = ControlLock().watchdog()
         assert "no stop is issued" in w["means"]
+
+
+class TestLeaseErgonomics:
+    """Two failure modes seen on live hardware (2026-08-19): a client asking
+    for a TTL above the cap got a 422 and carried on unauthenticated, and a
+    client that crashed holding a lease locked itself out for a full TTL."""
+
+    def test_ttl_above_the_cap_is_clamped_and_reported(self, client):
+        r = client.post("/api/v1/control",
+                        json={"client_id": "c", "domains": ["motion"],
+                              "ttl_s": 900})
+        assert r.status_code == 201, r.text
+        body = r.json()
+        assert body["expires_in_s"] <= 600.0
+        assert body["ttl_clamped"] == {"requested_s": 900.0, "granted_s": 600.0}
+
+    def test_ttl_within_the_cap_is_not_flagged(self, client):
+        r = client.post("/api/v1/control",
+                        json={"client_id": "c", "domains": ["motion"],
+                              "ttl_s": 120})
+        assert r.status_code == 201
+        assert "ttl_clamped" not in r.json()
+
+    def test_same_client_reacquires_its_own_live_lease(self, client):
+        first = client.post("/api/v1/control",
+                            json={"client_id": "runner",
+                                  "domains": ["motion", "program"]}).json()
+        r = client.post("/api/v1/control",
+                        json={"client_id": "runner", "domains": ["motion"]})
+        assert r.status_code == 201, r.text
+        second = r.json()
+        assert second["token"] != first["token"]
+        # the old token is dead, the new one works
+        assert client.post("/api/v1/control/heartbeat",
+                           headers={"X-FWS-Control-Token": first["token"]}
+                           ).status_code == 404
+        assert client.post("/api/v1/control/heartbeat",
+                           headers={"X-FWS-Control-Token": second["token"]}
+                           ).status_code == 200
+
+    def test_a_different_client_is_still_refused(self, client):
+        client.post("/api/v1/control",
+                    json={"client_id": "a", "domains": ["motion"]})
+        r = client.post("/api/v1/control",
+                        json={"client_id": "b", "domains": ["motion"]})
+        assert r.status_code == 423
+
+
+class TestLapseStopsTheProgramFirst:
+    """A lapsed lease that held the program domain stops a running program
+    through the interpreter before the motion cascade (a StopMotion cut into
+    a program's move left the controller half-stopped on live hardware)."""
+
+    def test_running_program_gets_programstop_before_stopmotion(self, client, fake):
+        fake.state.program_state = 2          # running
+        lease = app_mod.control.acquire("runner", ["motion", "program"])
+        fake.calls.clear()
+        app_mod._on_lease_lapse("test lapse", lease)
+        names = [c[0] for c in fake.calls]
+        assert "ProgramStop" in names
+        assert "StopMotion" in names
+        assert names.index("ProgramStop") < names.index("StopMotion")
+
+    def test_idle_program_is_left_alone(self, client, fake):
+        fake.state.program_state = 1          # stopped
+        lease = app_mod.control.acquire("runner", ["motion", "program"])
+        fake.calls.clear()
+        app_mod._on_lease_lapse("test lapse", lease)
+        names = [c[0] for c in fake.calls]
+        assert "ProgramStop" not in names
+        assert "StopMotion" in names
+
+    def test_program_only_lease_does_not_fire_the_motion_cascade(self, client, fake):
+        fake.state.program_state = 2
+        lease = app_mod.control.acquire("runner", ["program"])
+        fake.calls.clear()
+        app_mod._on_lease_lapse("test lapse", lease)
+        names = [c[0] for c in fake.calls]
+        assert "ProgramStop" in names
+        assert "StopMotion" not in names
+
+
+class TestEnableReportsTheMode:
+    """Enabling passes through manual on the wire; callers must be able to
+    see that, and to ask for auto back in the same call."""
+
+    def test_default_enable_leaves_manual_and_says_so(self, client, fake):
+        fake.calls.clear()
+        r = client.post("/api/v1/robot/enable",
+                        json={"enable": True, "confirm": True})
+        assert r.status_code == 200, r.text
+        assert r.json() == {"enabled": True, "mode": "manual"}
+        modes = [c[1] for c in fake.calls if c[0] == "Mode"]
+        assert modes == [(1,)]
+
+    def test_enable_with_mode_auto_reapplies_auto_after_enabling(self, client, fake):
+        fake.calls.clear()
+        r = client.post("/api/v1/robot/enable",
+                        json={"enable": True, "confirm": True, "mode": "auto"})
+        assert r.status_code == 200, r.text
+        assert r.json() == {"enabled": True, "mode": "auto"}
+        seq = [(c[0], c[1]) for c in fake.calls
+               if c[0] in ("Mode", "RobotEnable")]
+        assert seq == [("Mode", (1,)), ("RobotEnable", (1,)), ("Mode", (0,))]
+
+    def test_mode_must_be_manual_or_auto(self, client):
+        r = client.post("/api/v1/robot/enable",
+                        json={"enable": True, "confirm": True, "mode": "drag"})
+        assert r.status_code == 422

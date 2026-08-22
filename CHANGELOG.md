@@ -8,13 +8,74 @@ All notable changes to FWS are documented here. The format follows
 
 ### Fixed
 
+- **A lease TTL above the cap is clamped and reported, not refused.**
+  `POST /api/v1/control` with `ttl_s` above 600 s used to return 422 — and a
+  client observed on live hardware then carried on without a token, every
+  later load and run failing quietly. The grant now clamps to the cap and
+  says so (`ttl_clamped: {requested_s, granted_s}`); the cap itself is
+  unchanged.
+
+- **A client can re-acquire its own live lease.** Acquiring while a lease
+  for the same `client_id` is still live replaces it (new token, old token
+  dead) instead of answering 423. A runner that crashed mid-hold could not
+  get back in until its own lease lapsed — up to a full TTL of a blocked
+  robot.
+
+- **`/robot/enable` reports the mode it leaves the controller in.** Enabling
+  passes through manual on the wire, which silently disarmed callers that
+  then expected a program start to work. The response now carries
+  `mode`, and `mode: "auto"` in the request re-applies auto after the
+  enable (same `confirm` that enabling already requires).
+
+- **A capability probed while the RPC channel was down heals itself.**
+  `has()` re-probes an UNKNOWN verdict (rate-limited to once per 15 s per
+  feature) instead of reading False for the rest of the session. The
+  startup sweep once timed out on 29 of 32 features and `/robot/state`
+  lost its `program` field for hours — while `/execution`, which asks the
+  controller directly, answered fine.
+
+- **Program upload is refused while a program is running or paused** (409).
+  On v3.8.5.1 an upload into a running program stops it mid-move, and one
+  that landed in the half-stopped state after a watchdog stop wedged the
+  controller until a reboot. Stop the program first.
+
+- **The disconnect watchdog stops a running program through the
+  interpreter first.** A lapsed lease that held the `program` domain now
+  issues `ProgramStop` (when a program is running or paused) before the
+  motion cascade; a `StopMotion` cut straight into a program's move is what
+  produced the half-stopped interpreter above. A lapsed lease that held
+  only `program` no longer fires the motion cascade at all. Every outcome
+  is in the `watchdog.stop` audit record.
+
 - **Client heartbeat renews to the acquired TTL.** `FwsClient.control(ttl_s=…)`
   now echoes `ttl_s` on every heartbeat. The heartbeat route defaults to 30 s,
   so a lease acquired above ~90 s previously renewed *down* to 30 s and lapsed
   between beats (the client beats every `ttl_s/3`) — silently stopping the arm
   mid-hold. Covered by a new test that captures the heartbeat request.
 
+### Known firmware behaviour (v3.8.5.1, measured, not fixable in the gateway)
+
+- The program interpreter runs ahead of motion: a Lua `error()` thrown while
+  a move executes kills that move silently. Probe reachability with a
+  non-throwing IK check rather than `error()`.
+- The state RPC reports `stopped` during every line-end pause, so poll
+  position (back at home) rather than program state to detect completion.
+- `StartJOG` with direction 0 (negative) produced no motion through the
+  base/tool frames, and `max_dis` above roughly 10 mm was ignored; positive
+  jogs in the tool frame reach the other directions. Under investigation.
+
 ### Added
+
+- **A mode API — `GET`/`PUT /api/v1/robot/mode`.** The controller silently
+  ignores program starts in manual mode (discovered on live hardware), and
+  this firmware offers no way to read the mode: nothing in the 433-byte
+  telemetry frame, no Get RPC. `PUT` switches via the wire command
+  `Mode(0|1)` under the motion lock, with `confirm=true` required to reach
+  auto (it arms remote program starts; manual, the disarming direction,
+  needs none). `GET` answers from the last mode the gateway set this
+  session, labelled `"last-set-by-gateway"` — before that, `mode` is `null`
+  with a source saying why, never a guess. Raw `Mode` through `/invoke` now
+  redirects to the typed route, which is what keeps that record complete.
 
 - **Documentation site.** A mkdocs-material site (Quickstart, task guides,
   concepts, reference) builds `--strict` in CI and deploys to GitHub Pages. It

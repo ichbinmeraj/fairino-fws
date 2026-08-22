@@ -90,6 +90,12 @@ class Capabilities:
     _map: dict[str, Capability] = field(default_factory=dict)
     _lock: threading.Lock = field(default_factory=threading.Lock)
     probed_at: float | None = None
+    _reprobed_at: dict[str, float] = field(default_factory=dict)
+    # An UNKNOWN verdict is retried lazily, at most this often per feature,
+    # so a probe that ran while the RPC channel was down does not blank a
+    # feature for the rest of the session (the startup sweep once timed out
+    # on 29 of 32 features and /robot/state lost its program field for hours).
+    REPROBE_INTERVAL_S = 15.0
 
     def _is_faulted(self) -> bool:
         """True if the controller is in a fault state right now.
@@ -176,8 +182,29 @@ class Capabilities:
 
     def has(self, feature: str) -> bool:
         """True only when the controller confirmed the feature.
-        UNKNOWN reads False; use `state` to check for ABSENT."""
-        return self.state(feature) == AVAILABLE
+        UNKNOWN reads False -- after one rate-limited re-probe, so a verdict
+        taken while the RPC was down can heal; use `state` to check for
+        ABSENT."""
+        st = self.state(feature)
+        if st == UNKNOWN:
+            st = self._reprobe_unknown(feature)
+        return st == AVAILABLE
+
+    def _reprobe_unknown(self, feature: str) -> str:
+        """Retry a probe whose earlier verdict was UNKNOWN, no more often
+        than REPROBE_INTERVAL_S per feature. Returns the (possibly new) state."""
+        entry = next((p for p in PROBES if p[0] == feature), None)
+        if entry is None:
+            return UNKNOWN
+        now = time.time()
+        with self._lock:
+            if now - self._reprobed_at.get(feature, 0.0) < self.REPROBE_INTERVAL_S:
+                return UNKNOWN
+            self._reprobed_at[feature] = now
+        cap = self._probe_one(*entry)
+        with self._lock:
+            self._map[feature] = cap
+        return cap.state
 
     def require(self, feature: str) -> None:
         """Raise unless the feature is confirmed present. On UNKNOWN, re-probe

@@ -30,7 +30,7 @@ from .auth import KeyStore, is_open_path
 from .backup_api import build as build_backup_api
 from .capabilities import Capabilities
 from .commands_api import build_router
-from .control import DOMAINS, Conflict, ControlLock
+from .control import DOMAINS, MAX_TTL_S, Conflict, ControlLock
 from .control_api import build as build_control_api
 from .driver import RobotDriver, RobotError
 from .eventbus import EdgeDetector, EventBus
@@ -127,14 +127,39 @@ poses = PoseStore(settings.server.data_dir / "poses.json")
 recorder = FlightRecorder(settings.server.data_dir)
 
 
-def _on_lease_lapse(reason: str, lease) -> None:
-    """Disconnect watchdog: stop motion if a lapsed lease held the motion domain.
+def _stop_program_if_running() -> str:
+    """ProgramStop, but only when the interpreter is running or paused."""
+    try:
+        rtn = driver._call("GetProgramState")
+    except RobotError as e:
+        return f"state unreadable: {e}"
+    code = rtn[1] if isinstance(rtn, list) and len(rtn) > 1 else None
+    if code not in (2, 3):
+        return "not running"
+    try:
+        driver._ok(driver._call("ProgramStop"), "ProgramStop")
+        return "ok"
+    except RobotError as e:
+        return f"error: {e}"
 
-    Uses the same path as an explicit stop.
+
+def _on_lease_lapse(reason: str, lease) -> None:
+    """Disconnect watchdog: a lapsed lease stops what it was driving.
+
+    A running program is stopped through the interpreter (ProgramStop) BEFORE
+    the motion cascade: a StopMotion cut into a program's move leaves the
+    interpreter half-stopped, and on v3.8.5.1 an upload into that state
+    wedged the controller until a reboot (measured 2026-08-19). Motion then
+    gets the same cascade as an explicit stop.
     """
-    if "motion" not in lease.domains:
+    held = set(lease.domains)
+    if not (held & {"motion", "program"}):
         return
-    results = _stop_all()
+    results: dict[str, str] = {}
+    if "program" in held:
+        results["ProgramStop"] = _stop_program_if_running()
+    if "motion" in held:
+        results.update(_stop_all())
     # The most important line the audit trail can hold: the gateway stopped
     # the arm on its own, because a client went away mid-move. It used to
     # exist ONLY as a print, so an incident review found the arm stopped and
@@ -255,6 +280,12 @@ class JogRequest(BaseModel):
 class EnableRequest(BaseModel):
     enable: bool
     confirm: bool = Field(default=False, description="must be true to enable")
+    mode: str = Field(
+        default="manual", pattern="^(manual|auto)$",
+        description=("operating mode to leave the controller in after the "
+                     "enable: the wire sequence always passes through manual, "
+                     "so 'auto' (needed for program starts) is re-applied "
+                     "afterwards; the response reports the resulting mode"))
 
 
 # ---------------------------------------------------------------- system
@@ -410,7 +441,11 @@ async def _read_only_middleware(request: Request, call_next):
 class AcquireRequest(BaseModel):
     client_id: str = Field(min_length=1, max_length=120)
     domains: list[str] = Field(default_factory=lambda: ["motion"])
-    ttl_s: float = Field(default=30.0, ge=5.0, le=600.0)
+    ttl_s: float = Field(
+        default=30.0, ge=5.0,
+        description=(f"seconds before the lease lapses without a heartbeat; "
+                     f"values above {MAX_TTL_S:.0f} are clamped and reported "
+                     f"as ttl_clamped, not rejected"))
 
 
 def _require(domain: str, token: str | None) -> None:
@@ -446,7 +481,13 @@ def control_acquire(req: AcquireRequest):
         }) from e
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
-    return lease.as_dict(redact=False)
+    out = lease.as_dict(redact=False)
+    if req.ttl_s > MAX_TTL_S:
+        # Say so in the grant rather than refusing: a client that asked for
+        # more than the cap and got a 422 was observed to carry on without a
+        # token, and every later command failed quietly (2026-08-19).
+        out["ttl_clamped"] = {"requested_s": req.ttl_s, "granted_s": MAX_TTL_S}
+    return out
 
 
 @app.post("/api/v1/control/heartbeat")
@@ -479,13 +520,19 @@ def robot_enable(req: EnableRequest,
     _require("motion", x_fws_control_token)
     if req.enable and not (req.confirm or full_access()):
         raise HTTPException(400, "enabling requires confirm=true")
-    audit.record("robot.enable", enable=req.enable)
+    audit.record("robot.enable", enable=req.enable, mode=req.mode)
     try:
+        # Enabling goes through manual on the wire (the disarming direction).
+        # Callers that then expect to start a program need auto back, and
+        # several did not know the enable had switched them: report the mode
+        # the controller is left in, and re-apply auto when asked to.
         driver.set_mode(manual=True)
         driver.enable(req.enable)
+        if req.enable and req.mode == "auto":
+            driver.set_mode(manual=False)
     except RobotError as e:
         raise HTTPException(503, str(e)) from e
-    return {"enabled": req.enable}
+    return {"enabled": req.enable, "mode": driver.last_set_mode}
 
 
 LIMIT_MARGIN = settings.limits.limit_margin_deg

@@ -234,3 +234,40 @@ class TestHasIsHonestlyNamed:
     def test_the_module_exposes_the_three_constants(self):
         assert {caps_mod.AVAILABLE, caps_mod.ABSENT, caps_mod.UNKNOWN} == {
             "available", "absent", "unknown"}
+
+
+class TestUnknownIsRetriedLazily:
+    """A probe that ran while the RPC channel was down must not blank a
+    feature for the whole session (the startup sweep once timed out on 29 of
+    32 features and /robot/state lost its program field for hours)."""
+
+    def test_has_reprobes_an_unknown_verdict(self):
+        seen: dict[str, int] = {}
+
+        def behaviour(method, n):
+            seen[method] = seen.get(method, 0) + 1
+            if method == METHOD and seen[method] == 1:
+                return TransportError("down")     # only this feature, only once
+            return [0, 1.0, 2.0]
+        c = _caps(behaviour)
+        c.probe()
+        assert c.state(FEATURE) == UNKNOWN
+        assert c.has(FEATURE) is True          # re-probed on demand
+        assert c.state(FEATURE) == AVAILABLE
+
+    def test_reprobe_is_rate_limited(self):
+        c = _caps(TransportError("still down"))
+        c.probe()
+        before = len(c.driver.calls)
+        assert c.has(FEATURE) is False          # one re-probe
+        assert len(c.driver.calls) == before + 1
+        assert c.has(FEATURE) is False          # inside the interval: no call
+        assert len(c.driver.calls) == before + 1
+
+    def test_absent_is_not_reprobed(self):
+        c = _caps(ControllerFault("GetX: fault -506: method not defined", -506))
+        c.probe()
+        assert c.state(FEATURE) == ABSENT
+        before = len(c.driver.calls)
+        assert c.has(FEATURE) is False
+        assert len(c.driver.calls) == before

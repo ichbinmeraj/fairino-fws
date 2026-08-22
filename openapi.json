@@ -18,7 +18,7 @@
           },
           "ttl_s": {
             "default": 30.0,
-            "maximum": 600.0,
+            "description": "seconds before the lease lapses without a heartbeat; values above 600 are clamped and reported as ttl_clamped, not rejected",
             "minimum": 5.0,
             "title": "Ttl S",
             "type": "number"
@@ -123,6 +123,13 @@
           "enable": {
             "title": "Enable",
             "type": "boolean"
+          },
+          "mode": {
+            "default": "manual",
+            "description": "operating mode to leave the controller in after the enable: the wire sequence always passes through manual, so 'auto' (needed for program starts) is re-applied afterwards; the response reports the resulting mode",
+            "pattern": "^(manual|auto)$",
+            "title": "Mode",
+            "type": "string"
           }
         },
         "required": [
@@ -298,6 +305,29 @@
           "direction"
         ],
         "title": "LinearJogRequest",
+        "type": "object"
+      },
+      "ModeRequest": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "required for auto: auto mode arms remote program starts",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "mode": {
+            "enum": [
+              "auto",
+              "manual"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "ModeRequest",
         "type": "object"
       },
       "MoveRequest": {
@@ -5525,6 +5555,82 @@
           }
         },
         "summary": "Limits"
+      }
+    },
+    "/api/v1/robot/mode": {
+      "get": {
+        "description": "Operating mode (auto/manual), as far as it is knowable.\n\nThis firmware offers no way to READ the mode: the 433-byte telemetry\nframe carries no mode field and no RPC reports one. The gateway\ntherefore remembers the last mode it set this session; until it has\nset one, `mode` is null, which means UNKNOWN \u2014 not automatic.",
+        "operationId": "robot_mode_api_v1_robot_mode_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Robot Mode",
+        "tags": [
+          "control-layer"
+        ]
+      },
+      "put": {
+        "description": "Switch between automatic and manual mode.\n\nThe controller silently ignores program starts in manual mode, so a\nprogram that \"does nothing\" when started is usually this switch.\nSwitching to auto arms remote program starts and requires\nconfirm=true; switching to manual disarms them and does not.",
+        "operationId": "set_mode_api_v1_robot_mode_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-fws-control-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fws-Control-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Mode",
+        "tags": [
+          "control-layer"
+        ]
       }
     },
     "/api/v1/robot/payload": {

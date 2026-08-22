@@ -276,3 +276,28 @@ class TestRunIsGatedOnValidation:
         assert r.status_code == 200
         assert "safe_to_run" in r.json()
         assert "ProgramRun" not in [c[0] for c in fake.calls]
+
+
+class TestUploadRefusedWhileAProgramRuns:
+    """Uploading into a running program stops it mid-move on v3.8.5.1, and
+    an upload that landed in the half-stopped state after a watchdog stop
+    wedged the controller until a reboot (2026-08-19)."""
+
+    def test_running_program_blocks_upload(self, client, fake):
+        fake.state.program_state = 2
+        r = client.put("/api/v1/programs/RAW_x.lua",
+                       json={"content": LUA, "overwrite": True})
+        assert r.status_code == 409, r.text
+        assert "running" in r.json()["detail"]
+
+    def test_paused_program_blocks_upload(self, client, fake):
+        fake.state.program_state = 3
+        r = client.put("/api/v1/programs/RAW_x.lua",
+                       json={"content": LUA, "overwrite": True})
+        assert r.status_code == 409
+
+    def test_stopped_program_allows_upload(self, client, fake):
+        fake.state.program_state = 1
+        r = client.put("/api/v1/programs/RAW_x.lua",
+                       json={"content": LUA, "overwrite": True})
+        assert r.status_code in (200, 201), r.text
