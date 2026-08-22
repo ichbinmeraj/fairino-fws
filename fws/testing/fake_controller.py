@@ -92,6 +92,14 @@ LUA_NEEDS_A_TAUGHT_POINT = frozenset({"Lin", "ARC", "Circle"})
 # A call that is a whole statement (see the module docstring's stated weakness).
 LUA_CALL = re.compile(r"^([A-Za-z_]\w*)\s*\((.*)\)\s*;?$")
 
+# A function DEFINED in the uploaded file. The controller compiles the whole
+# chunk, so a call to a function the program itself defines is fine at any
+# arity; without this the fake rejected `local function log(...)` programs
+# that v3.8.5.1 verifiably compiles (same class of gap as MoveJ above).
+LUA_LOCAL_DEF = re.compile(
+    r"^(?:local\s+)?function\s+([A-Za-z_]\w*)\s*[(.:]"
+    r"|^(?:local\s+)?([A-Za-z_]\w*)\s*=\s*function\b")
+
 # A wedged validator answers at a fixed ~4.09 s (the retry cycle on a dead web
 # socket, not a validation result).
 WEDGED_VALIDATOR_SECONDS = 4.09
@@ -1027,6 +1035,11 @@ class FakeController:
         success, absent function, wrong argument count, or failed
         point-name lookup."""
         text = source.decode("utf-8", "replace")
+        defined: set[str] = set()
+        for raw in text.splitlines():
+            m = LUA_LOCAL_DEF.match(raw.split("--", 1)[0].strip())
+            if m:
+                defined.add(m.group(1) or m.group(2))
         for lineno, raw in enumerate(text.splitlines(), 1):
             line = raw.split("--", 1)[0].strip()
             if not line:
@@ -1037,6 +1050,8 @@ class FakeController:
             fn, argtext = m.group(1), m.group(2).strip()
             args = _split_lua_args(argtext)
             where = f"lua_name:/fruser/{name}---line_num:{lineno}---error_info:"
+            if fn in defined:
+                continue
             if fn not in self.lua_builtins:
                 return (f"{where} attempt to call global {fn} "
                         f"(a nil value)")

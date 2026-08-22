@@ -6,7 +6,7 @@ feature check the capability map first and return 501 if it is absent.
 from __future__ import annotations
 
 import contextlib
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -67,6 +67,13 @@ class WorkFrameRequest(BaseModel):
 
 class SpeedRequest(BaseModel):
     percent: float = Field(gt=0, le=100)
+
+
+class ModeRequest(BaseModel):
+    mode: Literal["auto", "manual"]
+    confirm: bool = Field(
+        default=False,
+        description="required for auto: auto mode arms remote program starts")
 
 
 def build(get_driver, get_settings, get_caps, get_control, audit) -> APIRouter:
@@ -384,6 +391,47 @@ def build(get_driver, get_settings, get_caps, get_control, audit) -> APIRouter:
             "SetLoadWeight")
         audit("robot.payload", mass_kg=req.mass_kg, load_num=req.load_num)
         return {"mass_kg": req.mass_kg, "load_num": req.load_num}
+
+    # --------------------------------------------------------------- mode
+    @router.get("/robot/mode")
+    def robot_mode():
+        """Operating mode (auto/manual), as far as it is knowable.
+
+        This firmware offers no way to READ the mode: the 433-byte telemetry
+        frame carries no mode field and no RPC reports one. The gateway
+        therefore remembers the last mode it set this session; until it has
+        set one, `mode` is null, which means UNKNOWN — not automatic.
+        """
+        mode = get_driver().last_set_mode
+        if mode is not None:
+            return {"mode": mode, "source": "last-set-by-gateway"}
+        return {"mode": None, "source": (
+            "unknown: this firmware exposes no mode read (nothing in the "
+            "telemetry frame, no Get RPC) and the gateway has not set the "
+            "mode this session")}
+
+    @router.put("/robot/mode")
+    def set_mode(req: ModeRequest,
+                 x_fws_control_token: str | None = Header(default=None)):
+        """Switch between automatic and manual mode.
+
+        The controller silently ignores program starts in manual mode, so a
+        program that "does nothing" when started is usually this switch.
+        Switching to auto arms remote program starts and requires
+        confirm=true; switching to manual disarms them and does not.
+        """
+        _lock("motion", x_fws_control_token)
+        if req.mode == "auto" and not (req.confirm or full_access()):
+            raise HTTPException(400, (
+                "auto mode arms remote program starts; resend with "
+                "confirm=true"))
+        try:
+            # Wire command Mode(0 = auto, 1 = manual); tracks last_set_mode.
+            get_driver().set_mode(manual=req.mode == "manual")
+        except RobotError as e:
+            raise HTTPException(503, str(e)) from e
+        audit("robot.mode", mode=req.mode)
+        return {"mode": req.mode, "applied": True}
 
     # -------------------------------------------------------------- speed
     @router.put("/robot/speed")

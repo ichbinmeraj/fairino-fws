@@ -172,12 +172,22 @@ class TestGate:
 
     def test_unknown_is_gated_exactly_like_motion(self, h):
         """An unknown-class command is gated exactly like motion."""
-        assert COMMANDS["Mode"].danger == "unknown"
-        r = h.post("Mode", [1])
+        # FT_Activate, not Mode: Mode is owned by PUT /api/v1/robot/mode, so
+        # the invoker refuses it outright (tested below).
+        assert COMMANDS["FT_Activate"].danger == "unknown"
+        r = h.post("FT_Activate", [1])
         assert r.status_code == 428
         assert "'motion' control lock" in r.json()["detail"]
-        assert h.post("Mode", [1], confirm=True,
+        assert h.post("FT_Activate", [1], confirm=True,
                       token=h.lease("motion")).status_code == 200
+
+    def test_mode_is_owned_by_the_typed_route(self, h):
+        """Mode's typed route records the last-set mode for GET /robot/mode;
+        reached raw, that record would go silently stale."""
+        r = h.post("Mode", [1], confirm=True, token=h.lease("motion"))
+        assert r.status_code == 409
+        assert "PUT /api/v1/robot/mode" in r.json()["detail"]
+        assert not h.sent("Mode"), "nothing may be sent while refused"
 
     def test_a_lease_held_by_someone_else_is_423_not_428(self, h):
         """428 means "go and acquire one"; 423 means "you cannot"."""
