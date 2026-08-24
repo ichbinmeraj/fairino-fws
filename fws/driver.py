@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import http.client
 import threading
+import time
 import xmlrpc.client
 from dataclasses import dataclass
 from typing import Any, ClassVar
@@ -15,6 +16,13 @@ from typing import Any, ClassVar
 from .access import full_access
 
 FORBIDDEN = ("system.listMethods", "system.methodHelp", "system.methodSignature")
+
+# Circuit breaker: consecutive transport failures before the driver stops
+# dialling, and how long it waits before trying again. Small on purpose --
+# long enough to keep the HTTP surface alive, short enough that a controller
+# coming back is noticed within a couple of seconds.
+OFFLINE_AFTER_FAILURES = 3
+OFFLINE_COOLDOWN_S = 2.0
 
 # Commands that must never reach the wire. Enforced here in the driver, below
 # the HTTP passthrough gate, so nothing that imports this class can route
@@ -98,6 +106,11 @@ class RobotDriver:
         # means "never set by this process", not automatic.
         self.last_set_mode: str | None = None
         self._lock = threading.Lock()
+        # Circuit breaker. See _call: after this many consecutive transport
+        # failures the driver stops dialling for a moment instead of making
+        # every caller wait out the socket timeout behind the lock.
+        self._consecutive_transport_failures = 0
+        self._offline_until = 0.0
         self._rpc = xmlrpc.client.ServerProxy(
             f"http://{ip}:{port}", transport=_Transport(timeout),
             allow_none=True,
@@ -118,10 +131,36 @@ class RobotDriver:
                 f"firmware, halts the controller, or wedges the RPC channel. "
                 f"See SAFETY.md. If you are certain, the caller must pass "
                 f"allow_refused=True explicitly.")
+        # FAIL FAST WHEN THE CONTROLLER IS GONE.
+        #
+        # Every call is serialised through one lock and every call waits out
+        # its own socket timeout. With the controller unreachable that is
+        # seconds per call, callers queue behind the lock, and the worker
+        # threads fill up until the gateway stops answering HTTP at all --
+        # including the endpoints that need no robot, which are exactly the
+        # ones somebody is reaching for when the robot has vanished. Measured
+        # on a cell with the arm unplugged: /openapi.json stopped answering.
+        #
+        # So after a few consecutive transport failures the driver declares
+        # the controller down and refuses immediately for a short cooldown.
+        # One call per cooldown still dials, so recovery is automatic and
+        # takes at most that long. A controller that ANSWERS -- even to refuse
+        # -- resets this: only transport failures count.
+        now = time.monotonic()
+        if now < self._offline_until:
+            raise TransportError(
+                f"{method}: not attempted -- the controller at {self.ip} has "
+                f"failed {self._consecutive_transport_failures} calls in a row "
+                f"and is treated as unreachable for another "
+                f"{self._offline_until - now:.1f} s. Reads that need no robot "
+                f"still work."
+            )
         with self._lock:
             try:
-                return getattr(self._rpc, method)(*args)
+                result = getattr(self._rpc, method)(*args)
             except xmlrpc.client.Fault as e:
+                # The controller answered, so the transport is fine.
+                self._consecutive_transport_failures = 0
                 raise ControllerFault(
                     f"{method}: fault {e.faultCode}: {e.faultString}",
                     code=e.faultCode,
@@ -129,8 +168,13 @@ class RobotDriver:
             except OSError as e:
                 # Includes socket.timeout, ConnectionRefusedError and
                 # ConnectionResetError, all OSError subclasses.
+                self._consecutive_transport_failures += 1
+                if self._consecutive_transport_failures >= OFFLINE_AFTER_FAILURES:
+                    self._offline_until = time.monotonic() + OFFLINE_COOLDOWN_S
                 raise TransportError(
                     f"{method}: transport error: {e}") from e
+            self._consecutive_transport_failures = 0
+            return result
 
     @staticmethod
     def _ok(result: Any, method: str) -> list[Any]:

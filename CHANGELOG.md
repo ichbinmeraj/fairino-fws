@@ -1,5 +1,55 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- `POST /api/v1/safety/stop` — the stop an application should call. Drives the
+  outputs named in `[safety] safe_outputs` to their safe value FIRST, then
+  stops the program, then motion, then jogs. An arm at rest with the tool still
+  firing is not stopped in any sense the operator cares about. Every step is
+  attempted even if an earlier one fails, it is never gated by the control
+  lease, and it always answers 200 with the per-step outcome.
+- `[safety] safe_outputs` configuration: which digital or analog outputs a stop
+  must make safe, and what value is safe for each (a normally-closed valve is
+  safe at 1, not 0). Empty by default — FWS will not guess which output on your
+  cell is dangerous.
+- `POST /api/v1/lua/lint` and `fws.lua_lint`: a static firmware-legality check
+  for controller Lua, offline and robot-free. Catches the `%` and `#` operators
+  this parser predates, `os`/`io`/`require`, a bare `PrintMsg` (absent on
+  v3.8.5.1), a `MoveL` that is not 33 arguments and a `MoveJ` that is not 29.
+  Severities are evidence-based: `math.*` is proven, `string.*` only ever
+  appears inside error paths that never fired. Validated against four programs
+  that have painted parts on real hardware.
+
+### Fixed
+- The gateway went silent when the controller did. Every call is serialised
+  through one driver lock and waits out its own socket timeout, so with the
+  arm unreachable, callers queued behind the lock until the worker threads
+  filled and FWS stopped answering HTTP entirely -- including `/openapi.json`,
+  which needs no robot, and which is exactly what somebody reaches for when
+  the robot has vanished. Measured on a live cell with the arm unplugged.
+  The driver now fails fast after three consecutive transport failures and
+  retries after a two-second cooldown; a controller that answers, even to
+  refuse, resets it. `/api/v1/robot/state` went from timing out at 30 s to
+  2.5 ms, and the console stayed usable throughout.
+- Simulator: `fail_once()` reached only the methods that happened to record
+  their calls, so a test asking "what if reading the fault state fails" got a
+  healthy answer instead. Injection now wraps every registered method, and
+  takes a `times` count — background pollers would otherwise absorb a single
+  injected failure before the call under test.
+- Simulator: the Lua compiler rejected the guarded-optional-call idiom
+  (`if type(X) == "function" then X() end`) whenever the guard and the call
+  were on different lines. That is how portable controller Lua is written, and
+  the real controller compiles it.
+- Simulator: `SetAO`, `SetToolDO` and `SetToolAO` were missing from the
+  builtin table although the firmware has them at the probed arities, so
+  analog and tool IO were reported as nil values.
+- Simulator: system variables (`SetSysVarValue`/`GetSysVarValue`, slots 1–20)
+  and `GetCurrentLine` were not implemented. They are the only shared memory
+  between a running Lua program and the outside world on this firmware, which
+  makes them the channel an application uses to command a running program and
+  read its progress back.
+
 All notable changes to FWS are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).

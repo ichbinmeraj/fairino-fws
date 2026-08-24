@@ -78,6 +78,13 @@ LUA_BUILTINS: dict[str, tuple[int, int]] = {
     "MoveL": (32, 33),
     "PTP": (1, 20),
     "SetDO": (2, 4),
+    # Probed present at these arities on v3.8.5.1 (protocol/lua_firmware.py).
+    # They were missing from this table, so the fake reported a nil value for
+    # analog and tool IO the firmware really has -- which is exactly the
+    # false alarm the MoveJ note below describes.
+    "SetAO": (2, 3),
+    "SetToolDO": (2, 4),
+    "SetToolAO": (2, 3),
     "FT_Control": (24, 24),
     "FT_Guard": (26, 26),
     "FT_Click": (6, 6),
@@ -91,6 +98,11 @@ LUA_NEEDS_A_TAUGHT_POINT = frozenset({"Lin", "ARC", "Circle"})
 
 # A call that is a whole statement (see the module docstring's stated weakness).
 LUA_CALL = re.compile(r"^([A-Za-z_]\w*)\s*\((.*)\)\s*;?$")
+
+# `type(Name) == "function"` -- the program checking for an optional call
+# before making it. Such a name is never an "attempt to call a nil value".
+LUA_TYPE_GUARD = re.compile(
+    r'type\s*\(\s*([A-Za-z_]\w*)\s*\)\s*==\s*[\'"]function[\'"]')
 
 # A function DEFINED in the uploaded file. The controller compiles the whole
 # chunk, so a call to a function the program itself defines is fine at any
@@ -194,6 +206,10 @@ class RobotState:
     do: dict = field(default_factory=dict)
     ai: dict = field(default_factory=dict)
     ao: dict = field(default_factory=dict)
+    # Controller system variables, 1..20. See SetSysVarValue.
+    sysvars: dict = field(default_factory=dict)
+    # The line the loaded program is executing; 0 when nothing is running.
+    current_line: int = 0
     moving: bool = False
 
     @property
@@ -224,6 +240,9 @@ class FakeController:
         self._threads: list[threading.Thread] = []
 
         self.calls: list[tuple[str, tuple]] = []      # for assertions in tests
+        # Per-method one-shot failure injection; see fail_once().
+        self._fail_next: dict[str, int] = {}
+        self._fail_with: dict[str, tuple[int, str]] = {}
         self.shut_down = False                       # ShutDownRobotOS reached
         self._corrupt_frames = 0                     # corrupt_next_frame()
         self.gripper_position = 0                    # MoveGripper
@@ -322,6 +341,28 @@ class FakeController:
     def _record(self, name: str, *args) -> None:
         with self._lock:
             self.calls.append((name, args))
+    def fail_once(self, method: str, code: int = -1, message: str = "",
+                  times: int = 1) -> None:
+        """Make the next `times` calls to `method` fail, then behave normally.
+
+        For testing what a client does when ONE thing goes wrong -- which is
+        the interesting case, and the one that is otherwise hard to reach. A
+        controller that refuses one command often honours the next, so code
+        that abandons a sequence at the first error is a real defect and this
+        is how you catch it.
+
+        `times` matters more than it looks: anything polling the controller in
+        the background -- a gateway's own health loop, a telemetry reader --
+        can consume a single injected failure before the call under test ever
+        happens, and the test then passes for the wrong reason. Raise it when
+        the method is one somebody else also calls.
+
+        The call is still recorded before it fails, so ordering assertions
+        still see it.
+        """
+        with self._lock:
+            self._fail_next[method] = self._fail_next.get(method, 0) + int(times)
+            self._fail_with[method] = (code, message or f"{method} refused")
 
     def _blind(self) -> bool:
         """True when position getters should refuse. [PN 3.4]
@@ -385,7 +426,30 @@ class FakeController:
 
     # ------------------------------------------------------------ RPC surface
     def _register(self) -> None:
-        r = self._rpc.register_function
+        raw_register = self._rpc.register_function
+
+        def r(func, name=None):
+            """Register one RPC, wrapped so fail_once() reaches every method.
+
+            The injection used to live in _record, which meant it only worked
+            for the methods that happen to record their calls -- so a test
+            asking "what if reading the fault state fails" silently got a
+            healthy answer instead. Wrapping at registration covers all of
+            them.
+            """
+            method = name or func.__name__
+
+            def wrapped(*args, **kwargs):
+                pending = self._fail_next.get(method, 0)
+                if pending:
+                    with self._lock:
+                        self._fail_next[method] = pending - 1
+                    raise Fault(*self._fail_with.get(
+                        method, (-1, f"{method} refused")))
+                return func(*args, **kwargs)
+
+            wrapped.__name__ = method
+            raw_register(wrapped, method)
 
         def ok(*payload):
             return [0, *payload]
@@ -411,6 +475,29 @@ class FakeController:
             return ok("192.168.100.155")     # the controller reports this fixed address
 
         # -- state -------------------------------------------------------
+        def SetSysVarValue(index, value):
+            """Controller system variables: 20 float slots, id 1..20.
+
+            The only shared memory between a running Lua program and the
+            outside world on this firmware, which is what makes them the
+            channel an application uses to command a program already running
+            and to read its progress back.
+            """
+            self._record("SetSysVarValue", int(index), float(value))
+            if not 1 <= int(index) <= 20:
+                return 1
+            self.state.sysvars[int(index)] = float(value)
+            return 0
+
+        def GetSysVarValue(index):
+            self._record("GetSysVarValue", int(index))
+            if not 1 <= int(index) <= 20:
+                return [1, 0.0]
+            return ok(self.state.sysvars.get(int(index), 0.0))
+
+        def GetCurrentLine():
+            return ok(self.state.current_line)
+
         def GetRobotErrorCode():
             return [0, self.state.error_main, self.state.error_sub]
 
@@ -860,9 +947,6 @@ class FakeController:
         def GetGripperTemp():
             return ok(1, 0)
 
-        def GetCurrentLine():
-            return ok(0)
-
         def GetActualJointSpeedsDegree(flag):
             return ok(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 
@@ -884,6 +968,7 @@ class FakeController:
         for fn in (ShutDownRobotOS, MoveGripper,
                    GetSoftwareVersion, GetSDKVersion, GetControllerIP,
                    GetRobotErrorCode, GetRobotMotionDone,
+                   SetSysVarValue, GetSysVarValue, GetCurrentLine,
                    GetActualJointPosDegree, GetActualTCPPose,
                    GetJointSoftLimitDeg, GetDefaultTransVel, GetProgramState,
                    GetLoadedProgram, GetForwardKin, GetInverseKin, Mode,
@@ -1040,6 +1125,18 @@ class FakeController:
             m = LUA_LOCAL_DEF.match(raw.split("--", 1)[0].strip())
             if m:
                 defined.add(m.group(1) or m.group(2))
+        # Names the program itself tests for before calling. Lua resolves
+        # globals at run time, so
+        #
+        #     if type(SetSysNumber) == "function" then SetSysNumber(1, 2) end
+        #
+        # compiles whether or not the firmware has that function -- and it is
+        # how portable controller Lua is written, because a program that must
+        # run on several firmwares cannot assume any optional call exists.
+        # Treating a guarded name as absent made the fake reject programs the
+        # real controller compiles, but only when the guard and the call were
+        # on separate lines, which is arbitrary.
+        defined |= set(LUA_TYPE_GUARD.findall(text))
         for lineno, raw in enumerate(text.splitlines(), 1):
             line = raw.split("--", 1)[0].strip()
             if not line:

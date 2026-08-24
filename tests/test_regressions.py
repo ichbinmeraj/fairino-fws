@@ -726,3 +726,77 @@ class TestJogDirectionIsBounded:
             back = j1()
         assert up == pytest.approx(start + 5, abs=0.2)
         assert back == pytest.approx(start, abs=0.2)
+
+
+class TestTheGatewayStaysAnswerableWhenTheControllerIsGone:
+    """A gateway that goes silent because the robot did is the worst time for
+    it to go silent.
+
+    Measured on a live cell with the arm unplugged: every call waited out its
+    socket timeout behind the driver's single lock, worker threads filled with
+    blocked callers, and the gateway stopped answering HTTP entirely --
+    including /openapi.json, which needs no robot at all. Somebody trying to
+    find out what happened got nothing.
+    """
+
+    def test_the_driver_stops_dialling_after_repeated_transport_failures(self):
+        from fws.driver import (
+            OFFLINE_AFTER_FAILURES,
+            RobotDriver,
+            TransportError,
+        )
+
+        # An address in TEST-NET-1 that nothing answers.
+        driver = RobotDriver(ip="192.0.2.1", timeout=0.25)
+        for _ in range(OFFLINE_AFTER_FAILURES):
+            with pytest.raises(TransportError):
+                driver._call("GetSoftwareVersion")
+
+        started = time.monotonic()
+        with pytest.raises(TransportError) as raised:
+            driver._call("GetSoftwareVersion")
+        elapsed = time.monotonic() - started
+
+        assert elapsed < 0.05, (
+            f"the call took {elapsed:.3f}s: it should have been refused "
+            f"without touching the socket")
+        assert "not attempted" in str(raised.value)
+        assert "unreachable" in str(raised.value)
+
+    def test_it_tries_again_after_the_cooldown(self):
+        from fws.driver import OFFLINE_AFTER_FAILURES, RobotDriver, TransportError
+
+        driver = RobotDriver(ip="192.0.2.1", timeout=0.25)
+        for _ in range(OFFLINE_AFTER_FAILURES):
+            with pytest.raises(TransportError):
+                driver._call("GetSoftwareVersion")
+        driver._offline_until = 0.0        # as if the cooldown had elapsed
+
+        started = time.monotonic()
+        with pytest.raises(TransportError):
+            driver._call("GetSoftwareVersion")
+
+        assert time.monotonic() - started > 0.1, (
+            "after the cooldown it must dial again, not stay latched off")
+
+    def test_a_controller_that_answers_resets_the_breaker(self, fake):
+        """Only TRANSPORT failures count. A controller refusing a command is
+        answering, and must not be mistaken for one that has gone away."""
+        from fws.driver import RobotDriver
+
+        driver = RobotDriver(ip=fake.host, port=fake.rpc_port, timeout=1.0)
+        driver._consecutive_transport_failures = 2
+        driver._call("GetSoftwareVersion")
+
+        assert driver._consecutive_transport_failures == 0
+
+    def test_a_fault_answer_also_resets_it(self, fake):
+        from fws.driver import ControllerFault, RobotDriver
+
+        driver = RobotDriver(ip=fake.host, port=fake.rpc_port, timeout=1.0)
+        driver._consecutive_transport_failures = 2
+        with pytest.raises(ControllerFault):
+            driver._call("NoSuchMethodAnywhere")
+
+        assert driver._consecutive_transport_failures == 0, (
+            "a fault is an answer: the controller is there")

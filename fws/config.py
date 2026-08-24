@@ -5,7 +5,7 @@ from __future__ import annotations
 import ipaddress
 import pathlib
 import tomllib
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import (
@@ -91,6 +91,42 @@ class LimitSettings(BaseModel):
         description="Refuse any commanded pose below this TCP height. Unset "
                     "means no floor, which is only sensible if nothing is "
                     "mounted below the robot.",
+    )
+
+
+class SafeOutput(BaseModel):
+    """One output that must be driven to a safe value when everything stops.
+
+    A robot arm coming to rest is only half of a stop. Whatever the tool was
+    doing -- spraying, welding, dispensing, gripping -- is usually still doing
+    it, and on a spray application an arm halted with the gun open over one
+    spot is a worse outcome than the arm finishing its stroke. So the outputs
+    named here are driven to `safe_value` FIRST, before any motion command.
+
+    Note for anyone relying on this: on firmware v3.8.5.1 the controller has no
+    output readback at all (GetDO and GetAO are absent), so FWS can command an
+    output off and can never confirm it went off. An output that must be off
+    for safety belongs on a hardware interlock as well as here.
+    """
+
+    kind: Literal["digital", "analog"] = "digital"
+    index: int = Field(ge=0, le=15)
+    safe_value: float = Field(
+        default=0.0,
+        description="digital: 0 or 1. analog: percent, 0-100. Usually 0, but a "
+                    "normally-closed valve may need 1 to be safe.",
+    )
+    name: str = Field(default="", description="what this output drives, for the log")
+
+
+class SafetySettings(BaseModel):
+    """What a stop does beyond stopping motion."""
+
+    safe_outputs: tuple[SafeOutput, ...] = Field(
+        default=(),
+        description="Outputs driven to their safe value at the start of every "
+                    "stop, before motion is touched. Empty by default: FWS "
+                    "will not guess which output on your cell is dangerous.",
     )
 
 
@@ -315,6 +351,7 @@ class Settings(BaseSettings):
     robot: RobotSettings = Field(default_factory=RobotSettings)
     server: ServerSettings = Field(default_factory=ServerSettings)
     limits: LimitSettings = Field(default_factory=LimitSettings)
+    safety: SafetySettings = Field(default_factory=SafetySettings)
     features: FeatureSettings = Field(default_factory=FeatureSettings)
     services: ControllerServicesSettings = Field(
         default_factory=ControllerServicesSettings)

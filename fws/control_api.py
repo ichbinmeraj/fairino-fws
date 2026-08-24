@@ -284,6 +284,85 @@ def build(get_driver, get_settings, get_caps, get_control, audit) -> APIRouter:
         return {"index": index, "percent": req.value,
                 "dac_count": round(req.value * 40.95)}
 
+    # ------------------------------------------------------------- safety
+    @router.post("/safety/stop")
+    def safety_stop(reason: str = "unspecified"):
+        """Stop everything, in the order that limits damage.
+
+        This is the stop an application should call. The two narrower stops
+        remain: POST /motion/stop halts jogs and moves, POST /execution/stop
+        halts the program. Neither touches the tool, and neither on its own is
+        the whole answer.
+
+        THE ORDER IS THE POINT. Configured safe outputs go first
+        (config: [safety] safe_outputs), because an arm that has come to rest
+        with the tool still firing is not stopped in any sense the operator
+        cares about -- on a spray cell it is a ruined part and a continuing
+        release. Then the program, so it cannot issue another move into the
+        gap; then motion; then jogs.
+
+        Every step runs even if an earlier one fails. A controller that refuses
+        one call may honour the next, and abandoning the sequence at the first
+        error would leave the arm moving.
+
+        NOT gated by the control lease and NOT confirmable: a stop that can be
+        declined because someone else holds the lock is a defect, not a safety
+        feature. Always answers 200 with the per-step outcome; read `ok` to
+        find out whether it all got through.
+
+        It IS refused in read-only mode, like every other write here. That is
+        deliberate and long-standing: a gateway configured to observe must not
+        be able to halt a run someone else started. If you need stop, do not
+        run read-only.
+
+        NOT an emergency stop. This is a functional stop over a network to a
+        controller that has to be listening. The physical E-stop is hardware
+        and nothing here substitutes for it.
+        """
+        results: dict[str, Any] = {}
+        outputs: list[dict[str, Any]] = []
+        driver_ = get_driver()
+
+        for out in get_settings().safety.safe_outputs:
+            label = out.name or f"{out.kind} output {out.index}"
+            try:
+                if out.kind == "digital":
+                    _ok(driver_._call("SetDO", out.index, int(out.safe_value), 0, 0),
+                        "SetDO")
+                else:
+                    _ok(driver_._call("SetAO", out.index, out.safe_value * 40.95, 0),
+                        "SetAO")
+                outputs.append({"output": label, "commanded": out.safe_value,
+                                "result": "ok"})
+            except (RobotError, HTTPException) as e:
+                outputs.append({"output": label, "commanded": out.safe_value,
+                                "result": f"error: {e}"})
+        results["safe_outputs"] = outputs
+
+        for method in ("ProgramStop", "StopMotion", "ImmStopJOG"):
+            try:
+                _ok(driver_._call(method), method)
+                results[method] = "ok"
+            except (RobotError, HTTPException) as e:
+                results[method] = f"error: {e}"
+
+        failed = [k for k, v in results.items()
+                  if isinstance(v, str) and v.startswith("error")]
+        failed += [o["output"] for o in outputs if o["result"].startswith("error")]
+        audit("safety.stop", reason=reason, results=results)
+        return {
+            "stop_requested": True,
+            "ok": not failed,
+            "failed": failed,
+            "results": results,
+            "reason": reason,
+            "note": (
+                "functional stop, not an emergency stop -- the physical E-stop "
+                "is hardware. This firmware cannot read outputs back, so a "
+                "safe output is commanded, never confirmed."
+            ),
+        }
+
     # ------------------------------------------------------------- frames
     @router.get("/frames/tool")
     def tool_frame():

@@ -307,6 +307,27 @@
         "title": "LinearJogRequest",
         "type": "object"
       },
+      "LintRequest": {
+        "properties": {
+          "check_known_functions": {
+            "default": true,
+            "description": "also flag global calls that this firmware's measured function table does not have. Off if your program calls into something FWS has not probed.",
+            "title": "Check Known Functions",
+            "type": "boolean"
+          },
+          "source": {
+            "description": "the Lua program text to check",
+            "maxLength": 524288,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "LintRequest",
+        "type": "object"
+      },
       "ModeRequest": {
         "properties": {
           "confirm": {
@@ -4061,6 +4082,46 @@
         ]
       }
     },
+    "/api/v1/lua/lint": {
+      "post": {
+        "description": "Check a program against what this controller family will accept.\n\nStatic and offline: nothing is uploaded, nothing is run, no robot is\ninvolved. Meant to be called BEFORE an upload, because the controller's own\nanswer to a bad program is either one line in a log you have to fetch over\na slow channel, or -- worse -- accepting it and then silently refusing to\nstart it.\n\nFindings carry a severity:\n\n    error    the program will not run, or is known to break the controller:\n             the '%' and '#' operators this parser predates, os/io/require,\n             a bare PrintMsg (absent on v3.8.5.1), a MoveL that is not 33\n             arguments, a MoveJ that is not 29.\n    warning  it will probably run, but nobody has proven it here: string.*\n             appears in the programs that have run only inside error paths\n             that never fired, and error() raised while a move is executing\n             kills that move.\n\n`ok` is true when nothing fatal was found. Warnings do not clear it on\ntheir own -- read them and decide.",
+        "operationId": "lint_lua_api_v1_lua_lint_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LintRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Lint Lua",
+        "tags": [
+          "lua"
+        ]
+      }
+    },
     "/api/v1/lua/sections": {
       "get": {
         "description": "The manual's own grouping -- motion, IO, welding, force, and the rest.",
@@ -5821,6 +5882,48 @@
           }
         },
         "summary": "Velocity",
+        "tags": [
+          "control-layer"
+        ]
+      }
+    },
+    "/api/v1/safety/stop": {
+      "post": {
+        "description": "Stop everything, in the order that limits damage.\n\nThis is the stop an application should call. The two narrower stops\nremain: POST /motion/stop halts jogs and moves, POST /execution/stop\nhalts the program. Neither touches the tool, and neither on its own is\nthe whole answer.\n\nTHE ORDER IS THE POINT. Configured safe outputs go first\n(config: [safety] safe_outputs), because an arm that has come to rest\nwith the tool still firing is not stopped in any sense the operator\ncares about -- on a spray cell it is a ruined part and a continuing\nrelease. Then the program, so it cannot issue another move into the\ngap; then motion; then jogs.\n\nEvery step runs even if an earlier one fails. A controller that refuses\none call may honour the next, and abandoning the sequence at the first\nerror would leave the arm moving.\n\nNOT gated by the control lease and NOT confirmable: a stop that can be\ndeclined because someone else holds the lock is a defect, not a safety\nfeature. Always answers 200 with the per-step outcome; read `ok` to\nfind out whether it all got through.\n\nIt IS refused in read-only mode, like every other write here. That is\ndeliberate and long-standing: a gateway configured to observe must not\nbe able to halt a run someone else started. If you need stop, do not\nrun read-only.\n\nNOT an emergency stop. This is a functional stop over a network to a\ncontroller that has to be listening. The physical E-stop is hardware\nand nothing here substitutes for it.",
+        "operationId": "safety_stop_api_v1_safety_stop_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "reason",
+            "required": false,
+            "schema": {
+              "default": "unspecified",
+              "title": "Reason",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Safety Stop",
         "tags": [
           "control-layer"
         ]

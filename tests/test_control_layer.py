@@ -382,3 +382,105 @@ class TestRecoveredRPCs:
         d = client.get("/api/v1/gripper").json()
         assert d["fitted"] is False
         assert "inferred" in d["note"]
+
+
+class TestSafetyStopDrivesTheToolOffFirst:
+    """POST /safety/stop is the stop an application calls.
+
+    Motion stopping is only half of a stop: whatever the tool was doing is
+    usually still doing it. These tests pin the ORDER, because the order is
+    the whole point -- an arm at rest with the spray gun still open is a
+    ruined part and a continuing release.
+    """
+
+    def _client(self, fake, **overrides):
+        from fastapi.testclient import TestClient
+
+        from fws import app as app_mod
+        from fws import config as config_mod
+        app_mod.create_app(config_mod.load(**{
+            "robot.ip": fake.host, "robot.rpc_port": fake.rpc_port,
+            "robot.telemetry_port": fake.stream_port,
+            "robot.upload_port": fake.upload_port,
+            "robot.download_port": fake.download_port,
+            **overrides}))
+        return TestClient(app_mod.app)
+
+    @property
+    def GUN(self):
+        return {"safety.safe_outputs": [
+            {"kind": "digital", "index": 3, "safe_value": 0,
+             "name": "spray gun"}]}
+
+    def test_the_output_goes_off_before_anything_stops_moving(self, fake):
+        with self._client(fake, **self.GUN) as c:
+            assert c.post("/api/v1/safety/stop").status_code == 200
+        names = [name for name, _ in fake.calls]
+        assert "SetDO" in names, "the configured safe output was never commanded"
+        for motion in ("ProgramStop", "StopMotion", "ImmStopJOG"):
+            assert names.index("SetDO") < names.index(motion), (
+                f"the gun must be commanded off before {motion}: an arm halted "
+                f"with the tool still firing is not stopped")
+
+    def test_the_configured_safe_value_is_what_gets_sent(self, fake):
+        """A normally-closed valve is safe at 1, not 0, so the value is
+        configuration rather than an assumption."""
+        with self._client(fake, **{"safety.safe_outputs": [
+                {"kind": "digital", "index": 5, "safe_value": 1,
+                 "name": "normally-closed valve"}]}) as c:
+            c.post("/api/v1/safety/stop")
+        sets = [args for name, args in fake.calls if name == "SetDO"]
+        assert (5, 1) in sets, f"expected DO5 driven to 1, saw {sets}"
+
+    def test_every_step_runs_even_when_an_earlier_one_fails(self, fake):
+        """A controller that refuses one call may honour the next. Giving up
+        at the first error would leave the arm moving."""
+        fake.fail_once("ProgramStop")
+        with self._client(fake, **self.GUN) as c:
+            body = c.post("/api/v1/safety/stop").json()
+        assert body["results"]["ProgramStop"].startswith("error")
+        assert body["results"]["StopMotion"] == "ok"
+        assert body["results"]["ImmStopJOG"] == "ok"
+        assert body["ok"] is False
+        assert "ProgramStop" in body["failed"]
+
+    def test_it_answers_200_and_reports_rather_than_raising(self, fake):
+        fake.fail_once("ProgramStop")
+        with self._client(fake, **self.GUN) as c:
+            assert c.post("/api/v1/safety/stop").status_code == 200
+
+    def test_no_configured_outputs_is_not_an_error(self, fake):
+        """FWS will not guess which output on your cell is dangerous, so the
+        default is empty and the stop still stops motion."""
+        with self._client(fake) as c:
+            body = c.post("/api/v1/safety/stop").json()
+        assert body["ok"] is True
+        assert body["results"]["safe_outputs"] == []
+        assert body["results"]["StopMotion"] == "ok"
+
+    def test_it_is_not_gated_by_the_control_lease(self, fake):
+        """Someone else holding the lock must not be able to prevent a stop."""
+        with self._client(fake, **self.GUN) as c:
+            got = c.post("/api/v1/control", json={
+                "client_id": "somebody-else", "domains": ["motion"]})
+            assert got.status_code == 201, got.text
+            # No token supplied on the stop, deliberately.
+            assert c.post("/api/v1/safety/stop").status_code == 200
+
+    def test_the_reason_reaches_the_audit_trail(self, fake):
+        from fws import app as app_mod
+        with self._client(fake, **self.GUN) as c:
+            c.post("/api/v1/safety/stop", params={"reason": "operator pressed stop"})
+        # recent() answers newest first.
+        entries = app_mod.audit.recent(limit=50, action="safety.stop")
+        assert entries, "a stop must be recorded, whatever else happens"
+        assert entries[0]["reason"] == "operator pressed stop", (
+            "the reason must survive into the trail: an incident review a week "
+            "later is the whole point of recording it")
+
+    def test_it_says_it_is_not_an_emergency_stop(self, fake):
+        """The wording matters: somebody will read this in an incident review."""
+        with self._client(fake, **self.GUN) as c:
+            body = c.post("/api/v1/safety/stop").json()
+        assert "not an emergency stop" in body["note"]
+        assert "E-stop" in body["note"]

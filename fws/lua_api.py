@@ -8,7 +8,9 @@ it. Availability on a given controller is a runtime question.
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
+from .lua_lint import fatal, lint_text
 from .protocol.lua_bridge import (
     ARGUMENT_ORDER_CONFLICTS,
     REFUSE_TO_GENERATE,
@@ -19,6 +21,7 @@ from .protocol.lua_bridge import (
     summary,
 )
 from .protocol.lua_firmware import (
+    LUA_FIRMWARE,
     absent_on,
     arity_disagrees_on,
     availability,
@@ -173,3 +176,64 @@ def bridge():
     from Lua, `lua_only` cannot be reached from the gateway."""
     return {"summary": summary(), "in_both": both(),
             "lua_only": lua_only(), "rpc_only": rpc_only()}
+
+
+class LintRequest(BaseModel):
+    source: str = Field(
+        description="the Lua program text to check",
+        max_length=512 * 1024)
+    check_known_functions: bool = Field(
+        default=True,
+        description="also flag global calls that this firmware's measured "
+                    "function table does not have. Off if your program calls "
+                    "into something FWS has not probed.")
+
+
+@router.post("/lint")
+def lint_lua(req: LintRequest):
+    """Check a program against what this controller family will accept.
+
+    Static and offline: nothing is uploaded, nothing is run, no robot is
+    involved. Meant to be called BEFORE an upload, because the controller's own
+    answer to a bad program is either one line in a log you have to fetch over
+    a slow channel, or -- worse -- accepting it and then silently refusing to
+    start it.
+
+    Findings carry a severity:
+
+        error    the program will not run, or is known to break the controller:
+                 the '%' and '#' operators this parser predates, os/io/require,
+                 a bare PrintMsg (absent on v3.8.5.1), a MoveL that is not 33
+                 arguments, a MoveJ that is not 29.
+        warning  it will probably run, but nobody has proven it here: string.*
+                 appears in the programs that have run only inside error paths
+                 that never fired, and error() raised while a move is executing
+                 kills that move.
+
+    `ok` is true when nothing fatal was found. Warnings do not clear it on
+    their own -- read them and decide.
+    """
+    known = None
+    if req.check_known_functions:
+        known = {
+            name: entry.documented_arity
+            for name, entry in LUA_FIRMWARE.get(PROBED_FIRMWARE, {}).items()
+            if entry.present
+        }
+    findings = lint_text(req.source, known)
+    problems = fatal(findings)
+    return {
+        "ok": not problems,
+        "firmware": PROBED_FIRMWARE,
+        "errors": len(problems),
+        "warnings": len(findings) - len(problems),
+        "findings": [
+            {"line": f.line, "severity": f.severity, "rule": f.rule,
+             "detail": f.detail, "text": f.text.strip()}
+            for f in findings
+        ],
+        "note": (
+            "static check only: a clean result means the program breaks none "
+            "of the rules FWS knows about, not that it does what you meant."
+        ),
+    }
