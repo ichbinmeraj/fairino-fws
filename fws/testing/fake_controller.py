@@ -27,6 +27,7 @@ import contextlib
 import io
 import re
 import socket
+import socketserver
 import struct
 import tarfile
 import threading
@@ -160,9 +161,26 @@ class Fault(xmlrpc.client.Fault):
         return self.faultCode
 
 
-class _Server(xmlrpc.server.SimpleXMLRPCServer):
+class _Server(socketserver.ThreadingMixIn, xmlrpc.server.SimpleXMLRPCServer):
     """Reports unknown methods as fault -506, the way the controller does (FWS
-    relies on that code to tell a missing method from a failed call)."""
+    relies on that code to tell a missing method from a failed call).
+
+    THREADED, and it matters. Single-threaded, every caller queued behind the
+    one in front: a client with several components reading state -- a gateway
+    plus the application on top of it -- could push a request past its own
+    socket timeout and read the delay as a controller that had gone away. The
+    real controller does not make the whole world wait its turn, and neither
+    should a fake that people test against. Callers that must not overlap are
+    serialised by the driver's own lock, where that belongs.
+    """
+
+    daemon_threads = True
+    # The default listen backlog is 5. A client with several components
+    # reading state can have more than that in flight at once, and a refused
+    # connection is indistinguishable from a controller that has gone away --
+    # so a fake with a short queue teaches its users to expect failures the
+    # real machine does not produce.
+    request_queue_size = 128
 
     def _dispatch(self, method, params):
         func = self.funcs.get(method)

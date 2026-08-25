@@ -23,6 +23,11 @@ FORBIDDEN = ("system.listMethods", "system.methodHelp", "system.methodSignature"
 # coming back is noticed within a couple of seconds.
 OFFLINE_AFTER_FAILURES = 3
 OFFLINE_COOLDOWN_S = 2.0
+# Failures only count as consecutive if they arrive close together. Three
+# scattered over ten minutes is a flaky cable, not an absent controller, and
+# treating them the same would eventually latch the breaker on any long-lived
+# gateway that has ever seen a hiccup.
+FAILURE_WINDOW_S = 10.0
 
 # Commands that must never reach the wire. Enforced here in the driver, below
 # the HTTP passthrough gate, so nothing that imports this class can route
@@ -94,7 +99,8 @@ class RobotDriver:
 
     def __init__(self, ip: str = "192.168.57.2", timeout: float = 5.0,
                  port: int = 20003, upload_port: int = 20010,
-                 download_port: int = 20011):
+                 download_port: int = 20011,
+                 offline_after_failures: int = OFFLINE_AFTER_FAILURES):
         self.ip = ip
         self.port = port
         # File transfer ports. Configurable because they must be redirectable
@@ -110,7 +116,10 @@ class RobotDriver:
         # failures the driver stops dialling for a moment instead of making
         # every caller wait out the socket timeout behind the lock.
         self._consecutive_transport_failures = 0
+        self._last_transport_failure = 0.0
         self._offline_until = 0.0
+        # 0 disables the breaker; see RobotSettings.offline_after_failures.
+        self._offline_after_failures = int(offline_after_failures)
         self._rpc = xmlrpc.client.ServerProxy(
             f"http://{ip}:{port}", transport=_Transport(timeout),
             allow_none=True,
@@ -168,9 +177,15 @@ class RobotDriver:
             except OSError as e:
                 # Includes socket.timeout, ConnectionRefusedError and
                 # ConnectionResetError, all OSError subclasses.
+                failed_at = time.monotonic()
+                if failed_at - self._last_transport_failure > FAILURE_WINDOW_S:
+                    self._consecutive_transport_failures = 0
+                self._last_transport_failure = failed_at
                 self._consecutive_transport_failures += 1
-                if self._consecutive_transport_failures >= OFFLINE_AFTER_FAILURES:
-                    self._offline_until = time.monotonic() + OFFLINE_COOLDOWN_S
+                if (self._offline_after_failures
+                        and self._consecutive_transport_failures
+                        >= self._offline_after_failures):
+                    self._offline_until = failed_at + OFFLINE_COOLDOWN_S
                 raise TransportError(
                     f"{method}: transport error: {e}") from e
             self._consecutive_transport_failures = 0

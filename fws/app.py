@@ -112,7 +112,8 @@ driver = RobotDriver(settings.robot.ip,
                      timeout=settings.robot.rpc_timeout_s,
                      port=settings.robot.rpc_port,
                      upload_port=settings.robot.upload_port,
-                     download_port=settings.robot.download_port)
+                     download_port=settings.robot.download_port,
+                     offline_after_failures=settings.robot.offline_after_failures)
 telemetry = Telemetry(settings.robot.ip, port=settings.robot.telemetry_port)
 keys = KeyStore(settings.auth.api_keys_file)
 capabilities = Capabilities(driver)
@@ -188,7 +189,9 @@ def create_app(new_settings: config_mod.Settings | None = None) -> FastAPI:
                              timeout=settings.robot.rpc_timeout_s,
                              port=settings.robot.rpc_port,
                              upload_port=settings.robot.upload_port,
-                             download_port=settings.robot.download_port)
+                             download_port=settings.robot.download_port,
+                             offline_after_failures=(
+                                 settings.robot.offline_after_failures))
         telemetry = Telemetry(settings.robot.ip,
                               port=settings.robot.telemetry_port)
         keys = KeyStore(settings.auth.api_keys_file)

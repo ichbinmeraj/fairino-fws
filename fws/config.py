@@ -31,6 +31,16 @@ class RobotSettings(BaseModel):
     upload_port: int = Field(default=20010, ge=1, le=65535)
     download_port: int = Field(default=20011, ge=1, le=65535)
     rpc_timeout_s: float = Field(default=5.0, gt=0, le=120)
+    offline_after_failures: int = Field(
+        default=3, ge=0, le=100,
+        description="Consecutive transport failures before the driver stops "
+                    "dialling for a moment. Without this, an unreachable "
+                    "controller makes every caller wait out its own socket "
+                    "timeout behind one lock until the gateway stops "
+                    "answering HTTP at all. Set 0 to disable -- appropriate "
+                    "against a simulator being hammered in-process, where a "
+                    "burst of failures means load rather than an absent robot.",
+    )
     telemetry_reconnect_s: float = Field(
         default=2.0, gt=0, le=60,
         description="Backoff before reconnecting the telemetry stream. Keep "

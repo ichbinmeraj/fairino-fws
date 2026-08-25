@@ -2286,6 +2286,7 @@
     },
     "/api/v1/execution": {
       "get": {
+        "description": "What the program engine is doing.\n\nA controller that cannot be reached is reported, not raised. This is\nthe endpoint an application polls while a job runs, and a 500 with a\nstack trace tells its operator nothing; \"unknown, and here is why\"\ntells them the robot went away. `state` is null in that case, never a\nguess -- unknown must not be dressed up as stopped.",
         "operationId": "execution_api_v1_execution_get",
         "responses": {
           "200": {

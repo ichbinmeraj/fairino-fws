@@ -790,6 +790,24 @@ class TestTheGatewayStaysAnswerableWhenTheControllerIsGone:
 
         assert driver._consecutive_transport_failures == 0
 
+    def test_failures_far_apart_do_not_add_up(self):
+        """Three failures over ten minutes is a flaky cable, not an absent
+        controller. Only a burst means the controller has gone."""
+        from fws.driver import FAILURE_WINDOW_S, RobotDriver, TransportError
+
+        driver = RobotDriver(ip="192.0.2.1", timeout=0.25)
+        with pytest.raises(TransportError):
+            driver._call("GetSoftwareVersion")
+        assert driver._consecutive_transport_failures == 1
+
+        # As if the next failure came long after the first.
+        driver._last_transport_failure -= FAILURE_WINDOW_S * 2
+        with pytest.raises(TransportError):
+            driver._call("GetSoftwareVersion")
+
+        assert driver._consecutive_transport_failures == 1, (
+            "an old failure must not still be counting toward the breaker")
+
     def test_a_fault_answer_also_resets_it(self, fake):
         from fws.driver import ControllerFault, RobotDriver
 

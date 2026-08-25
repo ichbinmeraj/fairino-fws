@@ -334,16 +334,37 @@ def build(get_driver, get_settings, get_caps, get_control, audit) -> APIRouter:
     # ----------------------------------------------------------- execution
     @router.get("/execution")
     def execution():
+        """What the program engine is doing.
+
+        A controller that cannot be reached is reported, not raised. This is
+        the endpoint an application polls while a job runs, and a 500 with a
+        stack trace tells its operator nothing; "unknown, and here is why"
+        tells them the robot went away. `state` is null in that case, never a
+        guess -- unknown must not be dressed up as stopped.
+        """
         d = get_driver()
-        code = _ok(d._call("GetProgramState"), "GetProgramState")[0]
+        try:
+            code = _ok(d._call("GetProgramState"), "GetProgramState")[0]
+        except RobotError as e:
+            return {
+                "state": None,
+                "state_code": None,
+                "reachable": False,
+                "note": f"the controller did not answer: {e}",
+            }
         out: dict[str, Any] = {"state": PROGRAM_STATE.get(code, "unknown"),
-                               "state_code": code}
+                               "state_code": code,
+                               "reachable": True}
+        # The extras are best-effort: losing the loaded name or the line
+        # number must not cost the caller the program state it came for.
         if get_caps().has("program.loaded"):
-            out["loaded"] = _ok(d._call("GetLoadedProgram"),
-                                "GetLoadedProgram")[0]
+            with contextlib.suppress(RobotError):
+                out["loaded"] = _ok(d._call("GetLoadedProgram"),
+                                    "GetLoadedProgram")[0]
         if get_caps().has("program.current_line"):
-            out["current_line"] = _ok(d._call("GetCurrentLine"),
-                                      "GetCurrentLine")[0]
+            with contextlib.suppress(RobotError):
+                out["current_line"] = _ok(d._call("GetCurrentLine"),
+                                          "GetCurrentLine")[0]
         return out
 
     @router.post("/execution/run")
