@@ -32,7 +32,7 @@ from .capabilities import Capabilities
 from .commands_api import build_router
 from .control import DOMAINS, MAX_TTL_S, Conflict, ControlLock
 from .control_api import build as build_control_api
-from .driver import RobotDriver, RobotError
+from .driver import ControllerFault, RobotDriver, RobotError, TransportError
 from .eventbus import EdgeDetector, EventBus
 from .events import AuditLog
 from .files_api import build as build_files_api
@@ -107,6 +107,23 @@ app = FastAPI(
     ),
     version=_pkg_version(),
 )
+
+
+# A route that lets a wire error escape used to answer 500 with a traceback
+# in the log -- the same answer a bug gets. Neither is a bug in the gateway:
+# a TransportError means the controller did not answer (503, try again once
+# it is back), a ControllerFault means it answered and refused (502).
+@app.exception_handler(TransportError)
+async def _transport_error(request: Request, exc: TransportError):
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+@app.exception_handler(ControllerFault)
+async def _controller_fault(request: Request, exc: ControllerFault):
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=502, content={"detail": str(exc)})
+
 
 driver = RobotDriver(settings.robot.ip,
                      timeout=settings.robot.rpc_timeout_s,

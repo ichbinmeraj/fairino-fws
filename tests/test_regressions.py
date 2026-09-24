@@ -818,3 +818,61 @@ class TestTheGatewayStaysAnswerableWhenTheControllerIsGone:
 
         assert driver._consecutive_transport_failures == 0, (
             "a fault is an answer: the controller is there")
+
+
+class TestUnreachableControllerIsNotA500:
+    """A wire error escaping a route answered 500 with a traceback -- what a
+    gateway bug looks like. Seen on the live cell 2026-09-24: the controller's
+    RPC server hung and every DO write from the dashboard came back 500."""
+
+    def _client(self, fake):
+        from fastapi.testclient import TestClient
+
+        from fws import app as app_mod
+        from fws import config as config_mod
+        app_mod.create_app(config_mod.load(**{
+            "robot.ip": fake.host, "robot.rpc_port": fake.rpc_port,
+            "robot.telemetry_port": fake.stream_port,
+            "robot.upload_port": fake.upload_port,
+            "robot.download_port": fake.download_port}))
+        return app_mod, TestClient(app_mod.app)
+
+    def _failing(self, monkeypatch, app_mod, exc):
+        real = app_mod.driver._call
+
+        def call(method, *a, **kw):
+            if method == "SetDO":
+                raise exc
+            return real(method, *a, **kw)
+
+        monkeypatch.setattr(app_mod.driver, "_call", call)
+
+    def _set_do(self, c):
+        token = c.post("/api/v1/control", json={
+            "client_id": "t", "domains": ["motion"]}).json()["token"]
+        try:
+            return c.put("/api/v1/io/digital/outputs/4",
+                         json={"value": 0, "confirm": True},
+                         headers={"X-FWS-Control-Token": token})
+        finally:
+            c.request("DELETE", "/api/v1/control",
+                      headers={"X-FWS-Control-Token": token})
+
+    def test_transport_error_answers_503_with_the_reason(self, fake, monkeypatch):
+        from fws.driver import TransportError
+        app_mod, c = self._client(fake)
+        self._failing(monkeypatch, app_mod, TransportError(
+            "SetDO: not attempted -- the controller is treated as unreachable"))
+        with c:
+            r = self._set_do(c)
+        assert r.status_code == 503
+        assert "unreachable" in r.json()["detail"]
+
+    def test_controller_fault_answers_502(self, fake, monkeypatch):
+        from fws.driver import ControllerFault
+        app_mod, c = self._client(fake)
+        self._failing(monkeypatch, app_mod, ControllerFault("SetDO: fault -1", code=-1))
+        with c:
+            r = self._set_do(c)
+        assert r.status_code == 502
+        assert "fault -1" in r.json()["detail"]
