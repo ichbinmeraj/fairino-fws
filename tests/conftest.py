@@ -41,9 +41,8 @@ def pytest_collection_modifyitems(config, items):
                        and not os.environ.get("CI"))
             if not allowed:
                 item.add_marker(skip_motion)
-        elif "hardware" in item.keywords:
-            if not config.getoption("--hardware"):
-                item.add_marker(skip_hw)
+        elif "hardware" in item.keywords and not config.getoption("--hardware"):
+            item.add_marker(skip_hw)
 
 
 @pytest.fixture
