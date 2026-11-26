@@ -46,6 +46,18 @@ enable_unverified_commands = false
 
 warn_insecure_robot_ports = true
 
+[safety]
+# Every write needs a control lease (428 without one), so the watchdog covers
+# every writer. false only while a client has not been updated to take one.
+# require_lease_for_writes = true
+#
+# Outputs every stop drives to a safe value, first and again after the
+# program is stopped. Empty by default. On a paint cell, name the gun, the
+# paint valve and the atomising air. Example (check the indices on your cell):
+# safe_outputs = [
+#   { kind = "digital", index = 0, safe_value = 0, name = "spray gun" },
+# ]
+
 [auth]
 # One API key per line. Required for any non-loopback bind.
 # api_keys_file = "/etc/fws/api-keys"

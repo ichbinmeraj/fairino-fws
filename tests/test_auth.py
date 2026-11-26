@@ -231,13 +231,16 @@ class TestOpenPathCannotOpenTheApi:
     an authentication bypass, since cli.py disclaims inspecting what a hook
     mounts. These pin the two ways the old startswith test leaked."""
 
+    def setup_method(self):
+        from fws import auth as auth_mod
+        self._original = list(auth_mod.ALWAYS_OPEN)
+
     def teardown_method(self):
         from fws import auth as auth_mod
-        # restore the built-in list after each mutation
-        auth_mod.ALWAYS_OPEN[:] = [
-            "/api/v1/motion/stop", "/api/v1/system/health",
-            "/docs", "/redoc", "/openapi.json",
-        ]
+        # Restore whatever the list was, not a copy of it written out here:
+        # a hard-coded copy silently dropped /api/v1/safety/stop for every
+        # test that ran after this class.
+        auth_mod.ALWAYS_OPEN[:] = self._original
 
     def test_prefixes_that_the_api_starts_with_are_refused(self):
         from fws import auth as auth_mod

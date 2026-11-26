@@ -26,7 +26,7 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from .access import full_access
+from .control import LeaseRefused
 from .driver import RobotError
 from .poses import Pose, PoseError, PoseStore
 
@@ -98,15 +98,10 @@ def build(get_driver, get_telemetry, get_store, get_control, audit) -> APIRouter
     def _require_config(token: str | None) -> None:
         """Writing a pose is a config-class change: it is the data a later
         motion command will use."""
-        if full_access():
-            return
-        control = get_control()
-        lease = control.held_by("config")
-        if lease is None:
-            return
-        ok, reason = control.check("config", token)
-        if not ok:
-            raise HTTPException(423, reason)
+        try:
+            get_control().gate("config", token)
+        except LeaseRefused as e:
+            raise HTTPException(e.status, str(e)) from e
 
     def _refuse(e: PoseError, status: int = 422):
         raise HTTPException(status, str(e)) from e

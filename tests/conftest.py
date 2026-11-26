@@ -1,9 +1,19 @@
 """Shared fixtures."""
 from __future__ import annotations
 
+import os
 import time
 
 import pytest
+
+# The shipping default is require_lease_for_writes = true: every write needs a
+# lease. Most of this suite predates that and tests other behaviour (wire
+# arguments, file routing, confirmations) by writing without one. Run those
+# with the old rule rather than rewrite several hundred calls in the same
+# change; tests/test_lease_required.py covers the new default explicitly by
+# passing safety.require_lease_for_writes=True. Set before fws.app is imported,
+# because the app loads its settings at import.
+os.environ.setdefault("FWS_SAFETY__REQUIRE_LEASE_FOR_WRITES", "false")
 
 from fws.driver import RobotDriver
 from fws.telemetry import Telemetry

@@ -134,9 +134,22 @@ class SafetySettings(BaseModel):
 
     safe_outputs: tuple[SafeOutput, ...] = Field(
         default=(),
-        description="Outputs driven to their safe value at the start of every "
-                    "stop, before motion is touched. Empty by default: FWS "
-                    "will not guess which output on your cell is dangerous.",
+        description="Outputs driven to their safe value by every stop (the "
+                    "open /motion/stop, /safety/stop, the lease watchdog and a "
+                    "lease break): first, before the program and motion are "
+                    "touched, and again once the program is stopped. Empty by "
+                    "default: FWS will not guess which output on your cell is "
+                    "dangerous, and /system/health warns while it is empty. "
+                    "On a spray cell, name the gun, the paint valve and the "
+                    "atomising air here.",
+    )
+    require_lease_for_writes: bool = Field(
+        default=True,
+        description="Every state-changing route needs a lease on its domain "
+                    "(428 without one), so the watchdog covers every writer. "
+                    "False restores the old behaviour, where a write with no "
+                    "lease passed whenever nobody held the domain; only for "
+                    "a client that has not been updated to take a lease yet.",
     )
 
 

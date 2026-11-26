@@ -17,6 +17,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from .access import full_access
+from .control import LeaseRefused
 from .driver import RobotError
 
 router = APIRouter(prefix="/api/v1/system", tags=["system"])
@@ -67,12 +68,10 @@ def _port_open(ip: str, port: int, timeout: float = 1.5) -> bool:
 
 def build(get_driver, get_settings, get_control, audit) -> APIRouter:
     def _lock(domain: str, token: str | None) -> None:
-        control = get_control()
-        if control.held_by(domain) is None:
-            return
-        ok, reason = control.check(domain, token)
-        if not ok:
-            raise HTTPException(428 if not token else 423, reason)
+        try:
+            get_control().gate(domain, token)
+        except LeaseRefused as e:
+            raise HTTPException(e.status, str(e)) from e
 
     @router.get("/recovery")
     def recovery():

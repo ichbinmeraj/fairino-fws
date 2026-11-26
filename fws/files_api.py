@@ -26,6 +26,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from . import files_wire as wire
+from .control import LeaseRefused
 from .driver import RobotError
 from .files_listing import ControllerListing
 from .lua_verdict import LogFetcher, Verdict, find_verdict
@@ -172,12 +173,10 @@ def build(get_driver, get_settings, get_control, audit) -> APIRouter:
         domain = LOCK_DOMAIN.get(kind_name)
         if domain is None:
             return
-        control = get_control()
-        if control.held_by(domain) is None:
-            return
-        ok, reason = control.check(domain, token)
-        if not ok:
-            raise HTTPException(428 if not token else 423, reason)
+        try:
+            get_control().gate(domain, token)
+        except LeaseRefused as e:
+            raise HTTPException(e.status, str(e)) from e
 
     def _kind(kind_name: str) -> wire.Kind:
         try:

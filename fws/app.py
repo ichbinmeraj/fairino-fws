@@ -30,9 +30,15 @@ from .auth import KeyStore, is_open_path
 from .backup_api import build as build_backup_api
 from .capabilities import Capabilities
 from .commands_api import build_router
-from .control import DOMAINS, MAX_TTL_S, Conflict, ControlLock
+from .control import DOMAINS, MAX_TTL_S, Conflict, ControlLock, LeaseRefused
 from .control_api import build as build_control_api
-from .driver import ControllerFault, RobotDriver, RobotError, TransportError
+from .driver import (
+    ControllerFault,
+    LockBusy,
+    RobotDriver,
+    RobotError,
+    TransportError,
+)
 from .eventbus import EdgeDetector, EventBus
 from .events import AuditLog
 from .files_api import build as build_files_api
@@ -50,6 +56,7 @@ from .recorder import SAMPLE_HZ, FlightRecorder
 from .recorder_api import build as build_recorder_api
 from .runners import AbortRegistry
 from .services_api import build as build_services_api
+from .stopping import safe_stop
 from .system_api import build as build_system_api
 from .telemetry import Telemetry
 
@@ -103,7 +110,8 @@ app = FastAPI(
     description=(
         "REST + WebSocket gateway for Fairino collaborative robots. "
         "NOTE: no endpoint here is an emergency stop. The physical E-stop is "
-        "hardware only. /motion/stop is a functional stop of jog motion."
+        "hardware only. /motion/stop and /safety/stop are operational stops: "
+        "safe outputs first, then the program, then motion."
     ),
     version=_pkg_version(),
 )
@@ -145,50 +153,37 @@ poses = PoseStore(settings.server.data_dir / "poses.json")
 recorder = FlightRecorder(settings.server.data_dir)
 
 
-def _stop_program_if_running() -> str:
-    """ProgramStop, but only when the interpreter is running or paused."""
-    try:
-        rtn = driver._call("GetProgramState")
-    except RobotError as e:
-        return f"state unreadable: {e}"
-    code = rtn[1] if isinstance(rtn, list) and len(rtn) > 1 else None
-    if code not in (2, 3):
-        return "not running"
-    try:
-        driver._ok(driver._call("ProgramStop"), "ProgramStop")
-        return "ok"
-    except RobotError as e:
-        return f"error: {e}"
-
-
 def _on_lease_lapse(reason: str, lease) -> None:
-    """Disconnect watchdog: a lapsed lease stops what it was driving.
+    """Disconnect watchdog: a lapsed lease makes safe what it was driving.
+
+    Runs the shared stop routine (fws/stopping.py), so the safe outputs go off
+    first. Before, the watchdog stopped motion and the program but left the
+    outputs alone: a dashboard that died mid-spray left the gun on.
 
     A running program is stopped through the interpreter (ProgramStop) BEFORE
     the motion cascade: a StopMotion cut into a program's move leaves the
     interpreter half-stopped, and on v3.8.5.1 an upload into that state
-    wedged the controller until a reboot (measured 2026-08-19). Motion then
-    gets the same cascade as an explicit stop.
+    wedged the controller until a reboot (measured 2026-08-19).
     """
     held = set(lease.domains)
     if not (held & {"motion", "program"}):
         return
-    results: dict[str, str] = {}
-    if "program" in held:
-        results["ProgramStop"] = _stop_program_if_running()
-    if "motion" in held:
-        results.update(_stop_all())
+    out = safe_stop(driver, settings.safety.safe_outputs, abortables,
+                    program="program" in held or "motion" in held,
+                    motion="motion" in held)
     # The most important line the audit trail can hold: the gateway stopped
     # the arm on its own, because a client went away mid-move. It used to
     # exist ONLY as a print, so an incident review found the arm stopped and
     # nothing saying who or why.
     audit.record("watchdog.stop", actor=lease.client_id, reason=reason,
-                 domains=sorted(lease.domains), results=results)
+                 domains=sorted(lease.domains), results=out["results"],
+                 ok=out["ok"], failed=out["failed"])
     print(f"[watchdog] {lease.client_id} lapsed ({reason}); "
-          f"stop issued: {results}", flush=True)
+          f"stop issued: {out['results']}", flush=True)
 
 
-control = ControlLock(on_lapse=_on_lease_lapse)
+control = ControlLock(on_lapse=_on_lease_lapse,
+                      require_lease=settings.safety.require_lease_for_writes)
 
 
 def create_app(new_settings: config_mod.Settings | None = None) -> FastAPI:
@@ -214,6 +209,7 @@ def create_app(new_settings: config_mod.Settings | None = None) -> FastAPI:
         keys = KeyStore(settings.auth.api_keys_file)
         capabilities = Capabilities(driver)
         LIMIT_MARGIN = settings.limits.limit_margin_deg
+        control.require_lease = settings.safety.require_lease_for_writes
         # The durable sink was supported by AuditLog and wired by nobody, so
         # every trail died with the process.
         audit.path = settings.audit_file()
@@ -263,6 +259,11 @@ def _error_poller():
     """Poll latched fault codes at 2 Hz on a background thread."""
     while True:
         try:
+            # Skip this tick if the driver is busy: the poller must not queue
+            # behind other calls and take a turn on the connection that a stop
+            # may need.
+            if driver.busy():
+                raise LockBusy("driver busy; poll skipped")
             main, sub = driver.error_code()
             _errors.update(main=main, sub=sub, ok=True, msg=None)
             was_faulted = edges._faulted
@@ -274,6 +275,8 @@ def _error_poller():
                 if name:
                     bus.publish("recording.dumped", file=name,
                                 main=main, sub=sub)
+        except LockBusy:
+            pass
         except RobotError as e:
             _errors.update(ok=False, msg=str(e))
         snap = telemetry.snapshot()
@@ -346,6 +349,17 @@ def health():
             f"reap_errors={wd['reap_errors']}, "
             f"lapse_callback_errors={wd['lapse_callback_errors']}). A lease "
             f"holder that disconnects may NOT trigger a stop.")
+
+    if not settings.safety.safe_outputs:
+        warnings.append(
+            "no safe outputs are configured ([safety] safe_outputs): a stop "
+            "and the lease watchdog halt the program and motion but leave "
+            "every tool output, including a spray gun, as it is")
+    if not control.require_lease:
+        warnings.append(
+            "writes do not require a lease ([safety] require_lease_for_writes "
+            "= false): a client that writes without one is not covered by "
+            "the watchdog")
 
     if not t.get("connected", False):
         warnings.append(
@@ -469,20 +483,13 @@ class AcquireRequest(BaseModel):
 
 
 def _require(domain: str, token: str | None) -> None:
-    """Gate a write on the control lock: 428 if no token, 423 if held by another."""
-    if full_access():
-        return                      # the lock is one of the guards taken off
-    lease = control.held_by(domain)
-    if lease is None:
-        return                      # unheld: single-client operation still works
-    ok, reason = control.check(domain, token)
-    if ok:
-        return
-    if not token:
-        raise HTTPException(428, (
-            f"'{domain}' is held by {lease.client_id}; acquire the control "
-            f"lock and send X-FWS-Control-Token"))
-    raise HTTPException(423, reason)
+    """Gate a write on the control lock: 428 without a valid lease, 423 if
+    another client holds it. One implementation for every route: see
+    ControlLock.gate."""
+    try:
+        control.gate(domain, token)
+    except LeaseRefused as e:
+        raise HTTPException(e.status, str(e)) from e
 
 
 @app.get("/api/v1/control")
@@ -527,11 +534,21 @@ def control_release(x_fws_control_token: str | None = Header(default=None)):
 
 @app.delete("/api/v1/control/{domain}", status_code=200)
 def control_break(domain: str):
-    """Force-release a lease (administrative override); does not fire the watchdog."""
+    """Force-release a lease (administrative override).
+
+    Breaking a lease that was driving motion or a program runs the stop
+    routine, exactly as if the holder had lapsed: otherwise the arm keeps
+    moving with nobody supervising it, and the watchdog that would have
+    stopped it has just been switched off.
+    """
     if domain not in DOMAINS:
         raise HTTPException(422, f"unknown domain '{domain}'")
     broken = control.break_lock(domain)
-    return {"broken": broken.as_dict() if broken else None}
+    stop = None
+    if broken is not None and set(broken.domains) & {"motion", "program"}:
+        _on_lease_lapse("lease broken by an administrator", broken)
+        stop = "stop routine run (see the watchdog.stop audit event)"
+    return {"broken": broken.as_dict() if broken else None, "stop": stop}
 
 
 @app.post("/api/v1/robot/enable")
@@ -726,74 +743,83 @@ def reset_errors():
 
 # ----------------------------------------------------------------- stop path
 def _confirm_standstill(window_s: float = 1.0, tol: float = 0.05,
-                        consecutive: int = 3) -> bool | None:
+                        consecutive: int = 3,
+                        max_age_s: float = 0.3) -> bool | None:
     """Confirm standstill from the 8083 stream.
 
-    Returns True (standstill seen), False (still moving at window end), or None
-    (no telemetry).
+    Returns True (standstill seen in fresh frames), False (new frames kept
+    showing motion until the window ended), or None (no fresh telemetry, or
+    no new frame at all: unknown).
+
+    Only NEW frames count. When the stream drops, the last joint values stay
+    in the snapshot; comparing those with themselves used to report
+    "standstill confirmed" while the gateway could see nothing at all.
     """
-    first = telemetry.snapshot().get("joints")
-    if first is None:
+    def fresh(snap: dict) -> bool:
+        ts = snap.get("ts")
+        return (bool(snap.get("connected")) and snap.get("joints") is not None
+                and ts is not None and time.time() - ts <= max_age_s)
+
+    first = telemetry.snapshot()
+    if not fresh(first):
         return None
-    prev, still = first, 0
-    deadline = time.time() + window_s
-    while time.time() < deadline:
+    prev, prev_frames, still = first["joints"], first.get("frames"), 0
+    seen_new = False
+    deadline = time.monotonic() + window_s
+    while time.monotonic() < deadline:
         time.sleep(0.05)
-        cur = telemetry.snapshot().get("joints")
-        if cur is None:
+        snap = telemetry.snapshot()
+        if not fresh(snap):
             return None
+        if snap.get("frames") == prev_frames:
+            continue                # no new frame yet; nothing learned
+        seen_new = True
+        cur = snap["joints"]
         if max(abs(a - b) for a, b in zip(cur, prev, strict=True)) < tol:
             still += 1
             if still >= consecutive:
                 return True
         else:
             still = 0
-        prev = cur
-    return False
+        prev, prev_frames = cur, snap.get("frames")
+    # No new frame in the whole window: the stream is connected but silent,
+    # so nothing is known. False is kept for "frames arrived and showed
+    # motion".
+    return False if seen_new else None
 
 
-def _stop_all() -> dict[str, str]:
-    """Issue every stop, each isolated: ImmStopJOG (jogs), StopMotion
-    (program moves), runner aborts.
-
-    ImmStopJOG does not stop program-space moves; StopMotion does.
-    """
-    results: dict[str, str] = {}
-    for name, fn in (("ImmStopJOG", driver.stop),
-                     ("StopMotion", driver.stop_motion)):
-        try:
-            fn()
-            results[name] = "ok"
-        except RobotError as e:
-            results[name] = f"error: {e}"
-    # Report abort failures rather than discarding them.
-    reached = abortables.request_abort_all()
-    failed = abortables.failed_last_call
-    results["runners"] = (
-        f"{reached} aborted" if not failed
-        else f"{reached} aborted, {failed} FAILED to abort -- "
-             f"use the physical stop")
-    return results
+def _stop_all() -> dict:
+    """The full stop routine: safe outputs, ProgramStop, ImmStopJOG,
+    StopMotion, runner aborts, safe outputs again. See fws/stopping.py."""
+    return safe_stop(driver, settings.safety.safe_outputs, abortables)
 
 
 @app.post("/api/v1/motion/stop")
 def stop():
-    """Functional stop of gateway-initiated motion. NOT an emergency or protective stop.
+    """Operational stop. NOT an emergency or protective stop.
 
-    Stops jogs (ImmStopJOG), program-space moves (StopMotion) and path runners.
-    Does not stop pendant motion, controller Lua programs, other LAN clients,
-    or passthrough commands. Always returns 200.
+    Runs the same routine as POST /safety/stop and the lease watchdog: the
+    configured safe outputs (spray off) first, then the controller program,
+    then jogs and program-space moves, then gateway path runners. Needs no
+    key and no lease. Does not stop pendant motion. Always returns 200; read
+    `ok` and `failed` for what got through, and `confirmed` for what the
+    telemetry saw (null = unknown, never assumed).
     """
-    results = _stop_all()
+    out = _stop_all()
     # Recorded AFTER the stop, unlike every other command: nothing may sit
     # between a stop request and the stop itself.
-    audit.record("motion.stop", results=results)
-    return {
+    audit.record("motion.stop", results=out["results"], ok=out["ok"])
+    body = {
         "stop_requested": True,
-        "results": results,
+        "ok": out["ok"],
+        "failed": out["failed"],
+        "results": out["results"],
         "confirmed": _confirm_standstill(),
         "confirmation_source": "telemetry-8083",
     }
+    if "warning" in out:
+        body["warning"] = out["warning"]
+    return body
 
 
 @app.post("/api/v1/motion/preview")
@@ -927,7 +953,7 @@ app.include_router(build_router(lambda: driver, lambda: settings))
 _audit = lambda action, **kw: audit.record(action, **kw)   # noqa: E731
 app.include_router(build_control_api(
     lambda: driver, lambda: settings, lambda: capabilities,
-    lambda: control, _audit,
+    lambda: control, _audit, lambda: abortables,
 ))
 app.include_router(build_programs_api(
     lambda: driver, lambda: settings, lambda: capabilities,

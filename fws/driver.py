@@ -28,6 +28,71 @@ OFFLINE_COOLDOWN_S = 2.0
 # treating them the same would eventually latch the breaker on any long-lived
 # gateway that has ever seen a hiccup.
 FAILURE_WINDOW_S = 10.0
+# How long an ordinary call waits for the driver lock before it gives up with
+# a 503. Without a bound, a controller that is slow but still answering never
+# trips the breaker, and every worker thread piles up on the lock. Stop calls
+# do not use this: they wait as long as it takes, at the front of the queue.
+LOCK_WAIT_S = 10.0
+_DEFAULT_WAIT = object()   # sentinel: use the driver's own lock wait
+
+
+class PriorityLock:
+    """A mutex where stop calls go ahead of everything that is waiting.
+
+    One XML-RPC connection, one call at a time: that does not change. What
+    changes is the order in which waiters get the connection. A stop that
+    arrives behind the 2 Hz fault poller and a queue of uploads used to wait
+    for all of them, each allowed its full socket timeout. Now it waits only
+    for the one call already on the wire.
+
+    It cannot interrupt that call. Cutting the in-flight request would need a
+    second connection to 20003, which the firmware may not tolerate; test that
+    on the bench before relying on it.
+    """
+
+    def __init__(self) -> None:
+        self._cond = threading.Condition(threading.Lock())
+        self._held = False
+        self._priority_waiting = 0
+
+    def acquire(self, *, priority: bool = False,
+                timeout: float | None = None) -> bool:
+        with self._cond:
+            if priority:
+                self._priority_waiting += 1
+                try:
+                    while self._held:
+                        self._cond.wait()
+                finally:
+                    self._priority_waiting -= 1
+                self._held = True
+                return True
+            deadline = None if timeout is None else time.monotonic() + timeout
+            while self._held or self._priority_waiting:
+                if deadline is None:
+                    self._cond.wait()
+                    continue
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    return False
+                self._cond.wait(left)
+            self._held = True
+            return True
+
+    def release(self) -> None:
+        with self._cond:
+            self._held = False
+            # Wake everyone only when a stop is waiting, so it is the one that
+            # gets in; otherwise one ordinary waiter is enough. Waking every
+            # waiter on every release costs real CPU when many are queued.
+            if self._priority_waiting:
+                self._cond.notify_all()
+            else:
+                self._cond.notify()
+
+    def locked(self) -> bool:
+        with self._cond:
+            return self._held
 
 # Commands that must never reach the wire. Enforced here in the driver, below
 # the HTTP passthrough gate, so nothing that imports this class can route
@@ -73,6 +138,11 @@ class TransportError(RobotError):
     nothing about firmware support."""
 
 
+class LockBusy(TransportError):
+    """An ordinary call gave up waiting for the driver lock. The controller
+    may be fine; the gateway is busy. Answers 503 like any TransportError."""
+
+
 @dataclass
 class Version:
     hardware: str
@@ -100,7 +170,8 @@ class RobotDriver:
     def __init__(self, ip: str = "192.168.57.2", timeout: float = 5.0,
                  port: int = 20003, upload_port: int = 20010,
                  download_port: int = 20011,
-                 offline_after_failures: int = OFFLINE_AFTER_FAILURES):
+                 offline_after_failures: int = OFFLINE_AFTER_FAILURES,
+                 lock_wait_s: float | None = LOCK_WAIT_S):
         self.ip = ip
         self.port = port
         # File transfer ports. Configurable because they must be redirectable
@@ -111,7 +182,8 @@ class RobotDriver:
         # driver remembers the last mode it successfully commanded. None
         # means "never set by this process", not automatic.
         self.last_set_mode: str | None = None
-        self._lock = threading.Lock()
+        self._lock = PriorityLock()
+        self._lock_wait_s = lock_wait_s
         # Circuit breaker. See _call: after this many consecutive transport
         # failures the driver stops dialling for a moment instead of making
         # every caller wait out the socket timeout behind the lock.
@@ -127,10 +199,17 @@ class RobotDriver:
 
     # -- plumbing ---------------------------------------------------------
     def _call(self, method: str, *args: Any,
-              allow_refused: bool = False) -> Any:
+              allow_refused: bool = False, priority: bool = False,
+              lock_wait_s: Any = _DEFAULT_WAIT) -> Any:
         """Send one command. allow_refused is a keyword-only escape hatch
         for the single route (shutdown) that legitimately needs a refused
-        command."""
+        command.
+
+        priority=True is for the stop path only (see stop_call): it skips the
+        circuit breaker and goes to the front of the lock queue. lock_wait_s
+        overrides how long an ordinary call waits for the lock (0 = do not
+        wait at all, None = wait forever); the default uses the driver's.
+        """
         if not full_access() and (method in FORBIDDEN
                                   or method.startswith("system.")):
             raise RobotError(f"introspection is blocked: {method}")
@@ -155,8 +234,12 @@ class RobotDriver:
         # One call per cooldown still dials, so recovery is automatic and
         # takes at most that long. A controller that ANSWERS -- even to refuse
         # -- resets this: only transport failures count.
+        #
+        # A stop never takes this exit. Refusing a stop because earlier calls
+        # failed is the wrong way round: the stop costs one socket timeout at
+        # worst, and it is the call someone needs most when the link is bad.
         now = time.monotonic()
-        if now < self._offline_until:
+        if not priority and now < self._offline_until:
             raise TransportError(
                 f"{method}: not attempted -- the controller at {self.ip} has "
                 f"failed {self._consecutive_transport_failures} calls in a row "
@@ -164,7 +247,17 @@ class RobotDriver:
                 f"{self._offline_until - now:.1f} s. Reads that need no robot "
                 f"still work."
             )
-        with self._lock:
+        if priority:
+            self._lock.acquire(priority=True)
+        else:
+            wait = (self._lock_wait_s if lock_wait_s is _DEFAULT_WAIT
+                    else lock_wait_s)
+            if not self._lock.acquire(timeout=wait):
+                raise LockBusy(
+                    f"{method}: not attempted -- the driver was busy for "
+                    f"{wait:.1f} s with other calls. Try again; a stop is "
+                    f"never refused this way.")
+        try:
             try:
                 result = getattr(self._rpc, method)(*args)
             except xmlrpc.client.Fault as e:
@@ -190,6 +283,22 @@ class RobotDriver:
                     f"{method}: transport error: {e}") from e
             self._consecutive_transport_failures = 0
             return result
+        finally:
+            self._lock.release()
+
+    def busy(self) -> bool:
+        """True while a call holds the connection. A hint, not a guarantee:
+        it can change the moment it is read."""
+        return self._lock.locked()
+
+    def stop_call(self, method: str, *args: Any) -> Any:
+        """Send one stop-path command: front of the queue, past the breaker.
+
+        Only for calls that make the cell safer (safe outputs, ProgramStop,
+        StopMotion, ImmStopJOG). Anything else sent this way would jump the
+        queue for no reason and starve the stop it is supposed to serve.
+        """
+        return self._call(method, *args, priority=True)
 
     @staticmethod
     def _ok(result: Any, method: str) -> list[Any]:
@@ -330,7 +439,7 @@ class RobotDriver:
         ImmStopJOG does NOT stop these -- it only stops jogs. NOT an
         emergency stop.
         """
-        self._ok(self._call("StopMotion"), "StopMotion")
+        self._ok(self.stop_call("StopMotion"), "StopMotion")
 
     def set_speed(self, vel: float) -> None:
         """Global speed override, percent."""
@@ -340,7 +449,22 @@ class RobotDriver:
 
     def stop(self) -> None:
         """Functional stop of jog motion. NOT an emergency stop."""
-        self._ok(self._call("ImmStopJOG"), "ImmStopJOG")
+        self._ok(self.stop_call("ImmStopJOG"), "ImmStopJOG")
+
+    def program_stop(self) -> None:
+        """Stop the controller's Lua interpreter so it issues no new move or
+        output. Sent on the stop path. NOT an emergency stop."""
+        self._ok(self.stop_call("ProgramStop"), "ProgramStop")
+
+    def set_safe_digital(self, index: int, value: int) -> None:
+        """Drive a control-box DO to its safe value on the stop path."""
+        self._ok(self.stop_call("SetDO", int(index), int(value), 0, 0), "SetDO")
+
+    def set_safe_analog(self, index: int, percent: float) -> None:
+        """Drive a control-box AO to its safe value on the stop path. The
+        wire takes a 12-bit DAC count, so 100 % is 4095."""
+        self._ok(self.stop_call("SetAO", int(index), float(percent) * 40.95, 0),
+                 "SetAO")
 
     def reset_errors(self) -> None:
         """Clear latched controller faults.

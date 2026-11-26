@@ -17,6 +17,7 @@ import secrets
 # orchestrator that holds none.
 ALWAYS_OPEN = [
     "/api/v1/motion/stop",
+    "/api/v1/safety/stop",
     "/api/v1/system/health",
     "/docs",
     "/redoc",
