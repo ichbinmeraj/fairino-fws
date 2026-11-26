@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+### Changed (stop path, 26 Nov 2026)
+- **One stop routine** (`fws/stopping.py`) for `POST /motion/stop`,
+  `POST /safety/stop`, the lease watchdog and a lease break: safe outputs,
+  `ProgramStop` (unless idle), `ImmStopJOG`, `StopMotion`, runner aborts, safe
+  outputs again. The open stop and the watchdog used to leave the configured
+  safe outputs alone, so a stop or a dead client could leave a spray gun on.
+- **Stops jump the queue and skip the circuit breaker.** The driver lock is a
+  priority lock; stop calls go first and are sent even while the breaker is
+  open. Ordinary calls give up with 503 (`LockBusy`) after about 10 s; the fault
+  poller skips busy ticks.
+- **Every write needs a lease** (`[safety] require_lease_for_writes`, default
+  true): 428 without a token even when the domain is unheld. All routers use
+  one gate, `ControlLock.gate`. **Breaking change** for clients that write
+  without a lease (the FR5 paint dashboard did): set the option to false until
+  they are updated.
+- **Breaking a `motion` or `program` lease runs the stop routine.**
+- `POST /safety/stop` needs no API key, like `/motion/stop`.
+- **Stop confirmation counts only fresh, new frames** (under 0.3 s old);
+  frozen telemetry gives `confirmed: null`, never `true`.
+- Health warns when `safe_outputs` is empty or leases are not required.
+
 ### Added
 - `POST /api/v1/safety/stop` — the stop an application should call. Drives the
   outputs named in `[safety] safe_outputs` to their safe value FIRST, then

@@ -36,22 +36,21 @@ curl -X POST http://127.0.0.1:8000/api/v1/control/heartbeat \
   -H 'X-FWS-Control-Token: <token>'
 ```
 
-The lease rule is not identical across routes, and the difference is
-deliberate:
+Every write route needs a lease; a few need it even with the opt-out below:
 
 | Route | Lease requirement |
 |---|---|
-| `POST /motion/jog`, `/motion/jog/linear` | Needed only if **another** client holds `motion` (428 without a token, 423 with a wrong one). If nobody holds it, a single client works leaseless — but then no watchdog protects you. |
-| `POST /motion/move` | **Always** required — 428 if the lease is unheld. A move must be stoppable by the watchdog if you disappear mid-motion. |
+| `POST /motion/jog`, `/motion/jog/linear` | `motion` lease required (428 without a token, 423 with a wrong one). |
+| `POST /motion/move` | **Always** required, even with `require_lease_for_writes = false`. |
 | `POST /gripper/*` | **Always** required — a gripper is motion. |
-| `POST /poses/*` writes | Needs the `config` lease only if another client holds it. |
-| `PUT/DELETE /programs/*`, `/execution/*` | Needs the `program` or `motion` lease only if another client holds it. |
+| `POST /poses/*` writes | `config` lease required. |
+| `PUT/DELETE /programs/*`, `/execution/*` | `program` or `motion` lease required. |
 
-!!! note "Prefer holding the lease even when it is optional"
-    The leaseless single-client path exists for convenience, but a jog run
-    without a lease has no watchdog behind it. If your process dies mid-step,
-    nothing notices. Hold `motion` for the duration of any session that moves
-    the arm.
+!!! note "`[safety] require_lease_for_writes = false`"
+    With the option off, the routes above that are not marked **Always** go
+    back to needing a lease only when another client holds the domain. A
+    write without a lease has no watchdog behind it: if your process dies
+    mid-step, nothing notices. Leave the option on.
 
 **Confirmation.** Commands that move to an absolute pose, close a gripper, run
 a program, or enable the arm require `confirm: true` in the body. It is not

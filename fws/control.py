@@ -52,6 +52,11 @@ class ControlLock:
     """
 
     on_lapse: object = None            # callable(reason: str, lease: Lease)
+    # True: every state-changing route needs a lease on its domain, and a
+    # write with no lease answers 428 even when nobody else holds it. Without
+    # this the watchdog only covers clients that chose to take a lease, and a
+    # writer that dies mid-spray has no safety net. See gate().
+    require_lease: bool = True
     _leases: dict[str, Lease] = field(default_factory=dict)
     _lock: threading.Lock = field(default_factory=threading.Lock)
     _stop: threading.Event = field(default_factory=threading.Event)
@@ -160,6 +165,35 @@ class ControlLock:
         return False, (f"domain '{domain}' is held by {lease.client_id} "
                        f"until {lease.expires_at:.0f}")
 
+    def gate(self, domain: str, token: str | None) -> None:
+        """The one lease check every state-changing route uses.
+
+        Raises LeaseRefused(428) when no valid lease is presented and one is
+        required, LeaseRefused(423) when another client holds the domain.
+        Stops never call this: a stop is never gated by the lease.
+        """
+        from .access import full_access  # late: access imports nothing here
+        if full_access():
+            return
+        lease = self.held_by(domain)
+        if lease is None:
+            if not self.require_lease:
+                return
+            raise LeaseRefused(428, (
+                f"hold the '{domain}' control lock (POST /api/v1/control with "
+                f'{{"domains": ["{domain}"]}}) and send its token as '
+                f"X-FWS-Control-Token. Every write needs a lease, so the "
+                f"watchdog can make the cell safe if the writer disappears."))
+        if token and secrets.compare_digest(token, lease.token):
+            return
+        if not token:
+            raise LeaseRefused(428, (
+                f"'{domain}' is held by {lease.client_id}; acquire the control "
+                f"lock and send X-FWS-Control-Token"))
+        raise LeaseRefused(423, (
+            f"domain '{domain}' is held by {lease.client_id} "
+            f"until {lease.expires_at:.0f}"))
+
     # --------------------------------------------------------------- mutation
     def acquire(self, client_id: str, domains: list[str],
                 ttl_s: float = DEFAULT_TTL_S) -> Lease:
@@ -235,3 +269,12 @@ class Conflict(RuntimeError):
         self.domain = domain
         self.holder = holder
         super().__init__(f"domain '{domain}' is held by {holder.client_id}")
+
+
+class LeaseRefused(RuntimeError):
+    """A write was refused by the control lease. status is 428 (no valid
+    lease presented) or 423 (another client holds the domain)."""
+
+    def __init__(self, status: int, message: str):
+        super().__init__(message)
+        self.status = status

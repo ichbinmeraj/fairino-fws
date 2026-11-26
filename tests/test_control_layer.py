@@ -413,6 +413,7 @@ class TestSafetyStopDrivesTheToolOffFirst:
              "name": "spray gun"}]}
 
     def test_the_output_goes_off_before_anything_stops_moving(self, fake):
+        fake.state.program_state = 2      # running: ProgramStop is sent
         with self._client(fake, **self.GUN) as c:
             assert c.post("/api/v1/safety/stop").status_code == 200
         names = [name for name, _ in fake.calls]
@@ -435,6 +436,7 @@ class TestSafetyStopDrivesTheToolOffFirst:
     def test_every_step_runs_even_when_an_earlier_one_fails(self, fake):
         """A controller that refuses one call may honour the next. Giving up
         at the first error would leave the arm moving."""
+        fake.state.program_state = 2      # running: ProgramStop is sent
         fake.fail_once("ProgramStop")
         with self._client(fake, **self.GUN) as c:
             body = c.post("/api/v1/safety/stop").json()
@@ -445,6 +447,7 @@ class TestSafetyStopDrivesTheToolOffFirst:
         assert "ProgramStop" in body["failed"]
 
     def test_it_answers_200_and_reports_rather_than_raising(self, fake):
+        fake.state.program_state = 2      # running: ProgramStop is sent
         fake.fail_once("ProgramStop")
         with self._client(fake, **self.GUN) as c:
             assert c.post("/api/v1/safety/stop").status_code == 200

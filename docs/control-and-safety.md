@@ -42,10 +42,14 @@ A lease is held over one or more named domains:
 | `config` | writes to configuration-class controller files (e.g. point tables) |
 | `program` | writes to program-class controller files |
 
-An **unheld** domain is free: a single client can command it with no lease at
-all. The lease exists to stop a *second* client from issuing contradictory
-commands while a first is driving. Only the `motion` domain has a
-disconnect-stop consequence (see the watchdog, below).
+**Every write needs a lease** (`[safety] require_lease_for_writes`, default
+`true`). A write without a valid token answers `428`, even when nobody else
+holds the domain. The lease is how the gateway knows who is writing, and the
+watchdog only protects writers it knows about: before this rule, a client that
+wrote spray outputs without a lease and then died left the gun on, and nothing
+noticed. Setting the option to `false` restores the old rule (an unheld domain
+could be written with no token) for a client that has not been updated yet;
+health warns while it is off. Stops are never gated by the lease.
 
 A single lease can cover several domains and is identified by one token.
 Acquiring `["motion", "config"]` returns one token that holds both; releasing
@@ -139,18 +143,21 @@ Both mean "you may not write this domain," but they ask for different fixes:
 | `428 Precondition Required` | The domain is held by another client and you sent **no** control token. | Acquire the lease (or wait for the holder), then send `X-FWS-Control-Token`. |
 | `423 Locked` | The domain is held by another client and the token you sent does **not** match. | You do not hold this domain. Do not retry with the same token; the current holder must release, or an administrator must break the lock. |
 
-`428` is the "you forgot to hold the lease" answer; `423` is the "someone else
-holds it" answer. An `acquire` that collides with an existing holder also
-returns `423`. A domain that is unheld is written without any token and returns
-neither.
+`428` is the "you forgot to hold the lease" answer, and with
+`require_lease_for_writes` on it is also the answer for an unheld domain;
+`423` is the "someone else holds it" answer. An `acquire` that collides with
+an existing holder also returns `423`.
 
 ### Explicit release does not fire the watchdog
 
-`DELETE /api/v1/control` (release) and `DELETE /api/v1/control/{domain}` (break)
-remove the lease **without** issuing a stop. A client that says goodbye has not
-disconnected; stopping the arm on a clean handoff would be a surprise, and it
-would punish the normal path. The watchdog exists only to catch a holder that
-*vanished* — see below.
+`DELETE /api/v1/control` (release) removes the lease **without** issuing a
+stop. A client that says goodbye has not disconnected; stopping the arm on a
+clean handoff would be a surprise, and it would punish the normal path.
+
+`DELETE /api/v1/control/{domain}` (break) is different: it takes the lease
+away from a holder that did not say goodbye, so the arm it was driving would
+keep moving with nobody supervising it. Breaking a lease that held `motion`
+or `program` therefore runs the stop routine, exactly as a lapse does.
 
 ## The disconnect watchdog
 
@@ -159,14 +166,15 @@ still there" ping: the holder simply stops heartbeating, the lease lapses, and
 **lapsing is what issues the stop.**
 
 A reaper thread runs about once a second. For every lease past its
-`expires_at`, it removes the lease and, if that lease held the `motion` domain,
-issues a stop through the same path as an explicit stop and records a
-`watchdog.stop` entry in the audit trail naming the client that lapsed.
+`expires_at`, it removes the lease and, if that lease held `motion` or
+`program`, runs the stop routine (below) and records a `watchdog.stop` entry
+in the audit trail naming the client that lapsed. The safe outputs go off
+first, so a dashboard that dies mid-spray no longer leaves the gun on.
 
-!!! note "Only `motion` triggers a disconnect stop"
-    A lapsed lease that held only `config` or `program` frees those domains but
-    issues no stop — there is no in-flight arm motion to stop. Only a lapsed
-    `motion` lease stops the machine.
+!!! note "Which lapses stop what"
+    `motion`: safe outputs, the program if it is running, jogs and moves.
+    `program` only: safe outputs and the program, no motion cascade.
+    `config` only: nothing is stopped.
 
 The stop fires outside the lock's internal mutex, so a stop that blocks on the
 RPC channel cannot stall another client trying to take over. If one lapse
@@ -199,27 +207,47 @@ unhealthy.
 curl -sX POST http://127.0.0.1:8000/api/v1/motion/stop
 ```
 
-`POST /api/v1/motion/stop` is **never authenticated** and **never gated by the
-control lease.** No API key, no control token. A client whose key is wrong,
+`POST /api/v1/motion/stop` and `POST /api/v1/safety/stop` are **never
+authenticated** and **never gated by the control lease.** No API key, no
+control token. A client whose key is wrong,
 expired or fumbled must still be able to stop the arm; a stop that can fail
 teaches people to retry instead of reaching for the physical button. It
 normally returns `200`.
 
-### Span of control
+### One stop routine
 
-The stop issues each of the following independently and reports each result:
+Both stop routes, the watchdog and a lease break run the same routine
+(`fws/stopping.py`), in this order, each step attempted even if an earlier
+one failed:
 
-- `ImmStopJOG` — jogs.
-- `StopMotion` — program-space moves. (`ImmStopJOG` does **not** stop these;
-  `StopMotion` does.)
-- Aborts of FWS's own path runners.
+1. The outputs in `[safety] safe_outputs` driven to their safe value (spray
+   gun, paint valve, atomising air on a paint cell).
+2. `ProgramStop`, unless the interpreter reads as idle (sent when its state
+   cannot be read), so a running Lua program such as `RAW_cell.lua` cannot
+   issue another move or switch the gun back on.
+3. `ImmStopJOG` (jogs), then `StopMotion` (program-space moves; `ImmStopJOG`
+   does **not** stop these).
+4. Aborts of FWS's own path runners.
+5. The safe outputs again: between step 1 and step 2 the program could have
+   set them back.
 
-Its span is the motion **FWS itself started.** It does **not** stop:
+With `safe_outputs` empty the response carries a `warning` and health warns:
+the stop then halts the program and motion and leaves every tool output as it
+is. A safe output is commanded, never confirmed: this firmware cannot read
+control-box outputs back.
 
-- motion started from the teach pendant,
-- a Lua program already running on the controller,
-- another client on the robot network,
-- passthrough/raw commands.
+### Its place in the queue
+
+Every call to the controller goes through one XML-RPC connection, one at a
+time. Stop calls go to the **front** of that queue and **skip the circuit
+breaker**: a stop no longer waits behind the 2 Hz fault poller and queued
+uploads, and it is still sent when earlier calls failed. It cannot interrupt
+the one call already on the wire (up to `robot.rpc_timeout_s`). Ordinary calls
+give up with `503` after waiting about 10 s for the connection, and the fault
+poller skips a tick instead of queueing.
+
+The stop does **not** stop motion started from the teach pendant or another
+client on the robot network.
 
 That limit is a property of the system, not a bug. When a runner fails to
 abort, the response says so explicitly (`"N aborted, M FAILED to abort — use
@@ -233,7 +261,12 @@ The response reports whether the arm was seen to come to rest, read from the
 ```json
 {
   "stop_requested": true,
-  "results": {"ImmStopJOG": "ok", "StopMotion": "ok", "runners": "1 aborted"},
+  "ok": true,
+  "failed": [],
+  "results": {"safe_outputs": [{"output": "spray gun", "commanded": 0, "result": "ok"}],
+              "ProgramStop": "ok", "ImmStopJOG": "ok", "StopMotion": "ok",
+              "runners": "1 aborted",
+              "safe_outputs_after_program_stop": [{"output": "spray gun", "commanded": 0, "result": "ok"}]},
   "confirmed": true,
   "confirmation_source": "telemetry-8083"
 }
@@ -241,10 +274,11 @@ The response reports whether the arm was seen to come to rest, read from the
 
 `confirmed` is:
 
-- `true` — joint positions held within tolerance across consecutive telemetry
-  samples inside the confirmation window,
-- `false` — still moving when the window closed,
-- `null` — no telemetry to judge by.
+- `true` — joint positions held within tolerance across consecutive **new**
+  telemetry frames inside the confirmation window,
+- `false` — new frames kept showing motion until the window closed,
+- `null` — unknown: the stream is down, the newest frame is older than 0.3 s,
+  or no new frame arrived. Frozen values are never read as standstill.
 
 !!! warning "Confirmation is a check, not an interlock"
     The stop is dispatched first; confirmation only observes the telemetry

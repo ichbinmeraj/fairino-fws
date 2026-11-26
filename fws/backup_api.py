@@ -20,6 +20,7 @@ from .backup import (
     download_point_table,
     upload_point_table,
 )
+from .control import LeaseRefused
 from .driver import RobotError
 
 router = APIRouter(prefix="/api/v1", tags=["backup"])
@@ -35,12 +36,10 @@ class PointTableRestore(BaseModel):
 def build(get_driver, get_settings, get_control, audit) -> APIRouter:
 
     def _lock(domain: str, token: str | None) -> None:
-        control = get_control()
-        if control.held_by(domain) is None:
-            return
-        ok, reason = control.check(domain, token)
-        if not ok:
-            raise HTTPException(428 if not token else 423, reason)
+        try:
+            get_control().gate(domain, token)
+        except LeaseRefused as e:
+            raise HTTPException(e.status, str(e)) from e
 
     def _safe_db_name(name: str) -> str:
         if "/" in name or "\\" in name or ".." in name:

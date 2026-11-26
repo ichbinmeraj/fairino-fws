@@ -12,8 +12,10 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from .access import full_access
+from .control import LeaseRefused
 from .driver import RobotError
 from .protocol.error_codes import ERROR_CODES, describe
+from .stopping import safe_stop
 
 router = APIRouter(prefix="/api/v1", tags=["control-layer"])
 
@@ -76,18 +78,15 @@ class ModeRequest(BaseModel):
         description="required for auto: auto mode arms remote program starts")
 
 
-def build(get_driver, get_settings, get_caps, get_control, audit) -> APIRouter:
+def build(get_driver, get_settings, get_caps, get_control, audit,
+          get_abortables=None) -> APIRouter:
     """Resolve dependencies at call time so create_app can rebind them."""
 
     def _lock(domain: str, token: str | None) -> None:
-        control = get_control()
-        lease = control.held_by(domain)
-        if lease is None:
-            return
-        ok, reason = control.check(domain, token)
-        if ok:
-            return
-        raise HTTPException(428 if not token else 423, reason)
+        try:
+            get_control().gate(domain, token)
+        except LeaseRefused as e:
+            raise HTTPException(e.status, str(e)) from e
 
     def _cap(feature: str) -> None:
         try:
@@ -289,17 +288,17 @@ def build(get_driver, get_settings, get_caps, get_control, audit) -> APIRouter:
     def safety_stop(reason: str = "unspecified"):
         """Stop everything, in the order that limits damage.
 
-        This is the stop an application should call. The two narrower stops
-        remain: POST /motion/stop halts jogs and moves, POST /execution/stop
-        halts the program. Neither touches the tool, and neither on its own is
-        the whole answer.
+        The same routine as POST /motion/stop and the lease watchdog
+        (fws/stopping.py); this route adds a `reason` to the audit line. It
+        needs no API key, like /motion/stop.
 
         THE ORDER IS THE POINT. Configured safe outputs go first
         (config: [safety] safe_outputs), because an arm that has come to rest
         with the tool still firing is not stopped in any sense the operator
         cares about -- on a spray cell it is a ruined part and a continuing
         release. Then the program, so it cannot issue another move into the
-        gap; then motion; then jogs.
+        gap; then jogs and motion; then the safe outputs again, because the
+        program could have switched them back on before it was stopped.
 
         Every step runs even if an earlier one fails. A controller that refuses
         one call may honour the next, and abandoning the sequence at the first
@@ -319,49 +318,24 @@ def build(get_driver, get_settings, get_caps, get_control, audit) -> APIRouter:
         controller that has to be listening. The physical E-stop is hardware
         and nothing here substitutes for it.
         """
-        results: dict[str, Any] = {}
-        outputs: list[dict[str, Any]] = []
-        driver_ = get_driver()
-
-        for out in get_settings().safety.safe_outputs:
-            label = out.name or f"{out.kind} output {out.index}"
-            try:
-                if out.kind == "digital":
-                    _ok(driver_._call("SetDO", out.index, int(out.safe_value), 0, 0),
-                        "SetDO")
-                else:
-                    _ok(driver_._call("SetAO", out.index, out.safe_value * 40.95, 0),
-                        "SetAO")
-                outputs.append({"output": label, "commanded": out.safe_value,
-                                "result": "ok"})
-            except (RobotError, HTTPException) as e:
-                outputs.append({"output": label, "commanded": out.safe_value,
-                                "result": f"error: {e}"})
-        results["safe_outputs"] = outputs
-
-        for method in ("ProgramStop", "StopMotion", "ImmStopJOG"):
-            try:
-                _ok(driver_._call(method), method)
-                results[method] = "ok"
-            except (RobotError, HTTPException) as e:
-                results[method] = f"error: {e}"
-
-        failed = [k for k, v in results.items()
-                  if isinstance(v, str) and v.startswith("error")]
-        failed += [o["output"] for o in outputs if o["result"].startswith("error")]
-        audit("safety.stop", reason=reason, results=results)
-        return {
+        out = safe_stop(get_driver(), get_settings().safety.safe_outputs,
+                        get_abortables() if get_abortables else None)
+        audit("safety.stop", reason=reason, results=out["results"])
+        body = {
             "stop_requested": True,
-            "ok": not failed,
-            "failed": failed,
-            "results": results,
+            "ok": out["ok"],
+            "failed": out["failed"],
+            "results": out["results"],
             "reason": reason,
             "note": (
-                "functional stop, not an emergency stop -- the physical E-stop "
+                "operational stop, not an emergency stop -- the physical E-stop "
                 "is hardware. This firmware cannot read outputs back, so a "
                 "safe output is commanded, never confirmed."
             ),
         }
+        if "warning" in out:
+            body["warning"] = out["warning"]
+        return body
 
     # ------------------------------------------------------------- frames
     @router.get("/frames/tool")

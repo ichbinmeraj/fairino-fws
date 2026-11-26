@@ -24,7 +24,8 @@ def audit_log():
 
 @pytest.fixture
 def control():
-    return ControlLock()
+    # Pre-dates the lease requirement; see the note in conftest.py.
+    return ControlLock(require_lease=False)
 
 
 @pytest.fixture

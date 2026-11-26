@@ -45,12 +45,14 @@ class TestStopIsNeverLockable:
 
 
 class TestLockSemantics:
-    def test_unheld_domain_allows_writes_without_a_token(self, client):
-        """Single-client operation must not require ceremony."""
+    def test_unheld_domain_allows_writes_without_a_token_when_opted_out(
+            self, client):
+        """require_lease_for_writes = false keeps the old single-client rule.
+        The default (a lease for every write) is in test_lease_required.py."""
+        assert app_mod.control.require_lease is False
         r = client.post("/api/v1/motion/jog",
                         json={"joint": 1, "direction": 1, "step": 1.0, "vel": 5.0})
         assert r.status_code != 428
-
     def test_holder_can_write_with_its_token(self, client):
         token = client.post("/api/v1/control",
                             json={"client_id": "a", "domains": ["motion"]}
